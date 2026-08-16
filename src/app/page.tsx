@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
-import { Modal } from "@/components/ui/modal";
 import { IconButton } from "@/components/ui/icon-button";
 import {
   DropdownMenu,
@@ -34,21 +34,20 @@ import {
 } from "lucide-react";
 
 export default function Home() {
-  const [isDemoModalOpen, setIsDemoModalOpen] = useState(false);
   const [activeTool, setActiveTool] = useState<string>("select");
   const [joinCode, setJoinCode] = useState("");
 
   const navigation = (
     <nav className="mx-auto flex max-w-7xl items-center justify-between p-6 lg:px-8">
-      <div className="flex items-center gap-3">
+      <Link href="/" className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10 border border-accent/30 text-accent">
           <Sparkles className="h-5 w-5" />
         </div>
         <span className="text-xl font-bold tracking-tight text-text-primary">
           ThinkSpace
         </span>
-        <Badge variant="accent">Phase 0</Badge>
-      </div>
+        <Badge variant="accent">v1.0</Badge>
+      </Link>
 
       <div className="hidden items-center gap-6 sm:flex">
         <a
@@ -72,12 +71,16 @@ export default function Home() {
       </div>
 
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => setIsDemoModalOpen(true)}>
-          Sign In
-        </Button>
-        <Button variant="primary" size="sm" onClick={() => setIsDemoModalOpen(true)}>
-          Get Started
-        </Button>
+        <Link href="/login">
+          <Button variant="ghost" size="sm">
+            Sign In
+          </Button>
+        </Link>
+        <Link href="/signup">
+          <Button variant="primary" size="sm">
+            Get Started
+          </Button>
+        </Link>
       </div>
     </nav>
   );
@@ -97,22 +100,24 @@ export default function Home() {
             Infinite canvas, ultra-low latency real-time multiplayer, and hand-drawn geometric precision. Designed for deep work and lightning-fast collaboration.
           </p>
           <div className="mt-8 flex items-center justify-center gap-4">
-            <Button
-              variant="primary"
-              size="lg"
-              rightIcon={<ArrowUpRight className="h-5 w-5" />}
-              onClick={() => setIsDemoModalOpen(true)}
-            >
-              Create Personal Board
-            </Button>
-            <Button
-              variant="secondary"
-              size="lg"
-              leftIcon={<Users className="h-5 w-5" />}
-              onClick={() => setIsDemoModalOpen(true)}
-            >
-              Join Room
-            </Button>
+            <Link href="/signup">
+              <Button
+                variant="primary"
+                size="lg"
+                rightIcon={<ArrowUpRight className="h-5 w-5" />}
+              >
+                Create Personal Board
+              </Button>
+            </Link>
+            <Link href="/login">
+              <Button
+                variant="secondary"
+                size="lg"
+                leftIcon={<Users className="h-5 w-5" />}
+              >
+                Join Room
+              </Button>
+            </Link>
           </div>
         </div>
 
@@ -175,7 +180,6 @@ export default function Home() {
                   variant="ghost"
                   size="sm"
                   tooltip="Share Room"
-                  onClick={() => setIsDemoModalOpen(true)}
                 >
                   <Share2 className="h-4 w-4" />
                 </IconButton>
@@ -269,7 +273,7 @@ export default function Home() {
                 Design System & Base UI Components
               </h3>
               <p className="text-sm text-text-secondary">
-                Futuristic Dark Glassmorphism system implemented in Phase 0.
+                Futuristic Dark Glassmorphism system.
               </p>
             </div>
           </CardHeader>
@@ -362,25 +366,6 @@ export default function Home() {
       <footer className="mt-auto border-t border-border py-8 text-center text-xs text-text-muted">
         <p>ThinkSpace © 2026 — Built with Next.js, TypeScript, and Tailwind CSS v4.</p>
       </footer>
-
-      {/* Demo Modal */}
-      <Modal
-        isOpen={isDemoModalOpen}
-        onClose={() => setIsDemoModalOpen(false)}
-        title="ThinkSpace — Phase 0 Ready"
-        footer={
-          <Button variant="primary" onClick={() => setIsDemoModalOpen(false)}>
-            Got it
-          </Button>
-        }
-      >
-        <p className="text-sm text-text-secondary">
-          Phase 0 (Foundation) is fully implemented! The design system, layout, and base UI primitives are complete.
-        </p>
-        <div className="mt-4 rounded-lg bg-bg-secondary p-3 text-xs font-mono text-text-muted">
-          Authentication, database schema, canvas drawing, and real-time collaboration will be integrated in subsequent phases.
-        </div>
-      </Modal>
     </AppShell>
   );
 }

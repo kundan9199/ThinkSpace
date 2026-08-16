@@ -1,0 +1,80 @@
+// ThinkSpace Prisma Schema
+// Database: Supabase PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ═══════════════════════════════════════════════════════════════
+// User & Profile
+// ═══════════════════════════════════════════════════════════════
+// Tied 1:1 with Supabase Auth (auth.users.id)
+model User {
+  id        String   @id // Maps to Supabase auth.users.id
+  email     String   @unique
+  name      String
+  avatarUrl String?  @map("avatar_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations reserved for future phases
+  ownedBoards  Board[]            @relation("BoardOwner")
+  participants BoardParticipant[]
+
+  @@map("users")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Board & Collaboration (Prepared for Phase 2+)
+// ═══════════════════════════════════════════════════════════════
+model Board {
+  id        String   @id @default(uuid())
+  title     String
+  roomCode  String   @unique @map("room_code")
+  ownerId   String   @map("owner_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  owner        User               @relation("BoardOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  elements     BoardElement[]
+  participants BoardParticipant[]
+
+  @@map("boards")
+}
+
+model BoardElement {
+  id        String   @id @default(uuid())
+  boardId   String   @map("board_id")
+  type      String
+  x         Float
+  y         Float
+  width     Float?
+  height    Float?
+  rotation  Float    @default(0)
+  zIndex    Int      @default(0) @map("z_index")
+  data      Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@map("board_elements")
+}
+
+model BoardParticipant {
+  id       String   @id @default(uuid())
+  boardId  String   @map("board_id")
+  userId   String   @map("user_id")
+  role     String   @default("MEMBER")
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([boardId, userId])
+  @@map("board_participants")
+}
