@@ -9,7 +9,7 @@
  */
 
 /** Common size variants used across UI components */
-export type Size = "sm" | "md" | "lg";
+export type Size = "sm" | "md" | "lg" ;
 
 /** Common component variant for visual distinction */
 export type Variant = "primary" | "secondary" | "ghost" | "danger";
