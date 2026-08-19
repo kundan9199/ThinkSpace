@@ -3,9 +3,10 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useCanvasStore } from "@/store/canvas/canvas-store";
 import { CanvasRenderer } from "../rendering/canvas-renderer";
-import { screenToWorld, zoomAtPoint } from "../core/camera";
-import { ToolType, CanvasElement, Point } from "@/types/canvas";
+import { screenToWorld, worldToScreen, zoomAtPoint } from "../core/camera";
+import { ToolType, CanvasElement, Point, TextElement } from "@/types/canvas";
 import { BoardDetails } from "@/lib/board/actions";
+import { measureText } from "../geometry/text-measurement";
 import {
   getUnionBounds,
   getSelectionHandles,
@@ -32,6 +33,8 @@ import {
   ZoomOut,
   RotateCcw,
   Layers,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 
 export interface CanvasWorkspaceProps {
@@ -59,10 +62,22 @@ type InteractionMode =
   | "resizing"
   | "rotating";
 
+interface TextEditingSession {
+  id?: string;
+  worldX: number;
+  worldY: number;
+  text: string;
+  fontSize: number;
+  fontFamily: string;
+  strokeColor: string;
+  initialElements: CanvasElement[];
+}
+
 export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [dimensions, setDimensions] = useState<{ width: number; height: number }>({
     width: 0,
@@ -71,6 +86,12 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
 
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
+  const [editingSession, setEditingSession] = useState<TextEditingSession | null>(null);
+  const editingSessionRef = useRef<TextEditingSession | null>(null);
+
+  useEffect(() => {
+    editingSessionRef.current = editingSession;
+  }, [editingSession]);
 
   // ── Interaction Refs (decoupled from React render for 60fps) ──────────────
   const interactionModeRef = useRef<InteractionMode>("idle");
@@ -96,14 +117,24 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
   const rotateStartAngleRef = useRef<number>(0);
   const originalBoundsRef = useRef<BoundingBox | null>(null);
 
+  // History drag snapshot refs
+  const dragStartElementsSnapshotRef = useRef<CanvasElement[] | null>(null);
+  const hasTransformedRef = useRef(false);
+
   // ── Zustand Store ─────────────────────────────────────────────────────────
   const elements = useCanvasStore((s) => s.elements);
   const selectedElementIds = useCanvasStore((s) => s.selectedElementIds);
   const activeTool = useCanvasStore((s) => s.activeTool);
   const viewport = useCanvasStore((s) => s.viewport);
+  const past = useCanvasStore((s) => s.past);
+  const future = useCanvasStore((s) => s.future);
 
   const addElement = useCanvasStore((s) => s.addElement);
   const removeElement = useCanvasStore((s) => s.removeElement);
+  const removeElements = useCanvasStore((s) => s.removeElements);
+  const commitSnapshot = useCanvasStore((s) => s.commitSnapshot);
+  const undo = useCanvasStore((s) => s.undo);
+  const redo = useCanvasStore((s) => s.redo);
   const setSelectedElementIds = useCanvasStore((s) => s.setSelectedElementIds);
   const clearSelection = useCanvasStore((s) => s.clearSelection);
   const setActiveTool = useCanvasStore((s) => s.setActiveTool);
@@ -214,21 +245,118 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
     }
   }, [elements, selectedElementIds, viewport, dimensions, getSelectionState]);
 
-  // ── 4. Keyboard Shortcuts ─────────────────────────────────────────────────
+  // ── 4. Text Editing Commit / Cancel ───────────────────────────────────────
+  const commitTextEditing = useCallback(() => {
+    const session = editingSessionRef.current;
+    if (!session) return;
+    const trimmed = session.text.trim();
+
+    if (trimmed.length > 0) {
+      const measured = measureText(
+        session.text,
+        session.fontSize,
+        session.fontFamily
+      );
+
+      if (session.id) {
+        // Editing existing text element
+        commitSnapshot(session.initialElements);
+        useCanvasStore.getState().updateElement(session.id, {
+          text: session.text,
+          width: measured.width,
+          height: measured.height,
+          fontSize: session.fontSize,
+          fontFamily: session.fontFamily,
+          lineHeight: measured.lineHeight,
+        });
+      } else {
+        // Creating new text element
+        const newEl: CanvasElement = {
+          id: `el-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          type: "text",
+          x: session.worldX,
+          y: session.worldY,
+          width: measured.width,
+          height: measured.height,
+          rotation: 0,
+          strokeColor: session.strokeColor,
+          backgroundColor: "transparent",
+          strokeWidth: 1,
+          opacity: 1,
+          zIndex: useCanvasStore.getState().elements.length + 1,
+          text: session.text,
+          fontSize: session.fontSize,
+          fontFamily: session.fontFamily,
+          lineHeight: measured.lineHeight,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        };
+        addElement(newEl);
+        setSelectedElementIds([newEl.id]);
+        setActiveTool("select");
+      }
+    } else if (session.id) {
+      // Empty text on existing element -> remove it
+      removeElement(session.id);
+    }
+
+    editingSessionRef.current = null;
+    setEditingSession(null);
+  }, [commitSnapshot, addElement, removeElement, setSelectedElementIds, setActiveTool]);
+
+  // Focus textarea when editingSession starts (only once when session opens)
+  const isEditing = editingSession !== null;
+  useEffect(() => {
+    if (isEditing) {
+      const focusTextarea = () => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          const len = textareaRef.current.value.length;
+          textareaRef.current.setSelectionRange(len, len);
+        }
+      };
+      focusTextarea();
+      const raf = requestAnimationFrame(focusTextarea);
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [isEditing]);
+
+  // ── 5. Keyboard Shortcuts & Undo/Redo ─────────────────────────────────────
   useEffect(() => {
     const isTyping = () => {
+      if (editingSessionRef.current !== null) return true;
       const el = document.activeElement;
       if (!el) return false;
       const tag = el.tagName;
       return (
         tag === "INPUT" ||
         tag === "TEXTAREA" ||
+        (el as HTMLElement).isContentEditable ||
         (el as HTMLElement).contentEditable === "true"
       );
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isTyping()) return;
+
+      // Handle Undo / Redo shortcuts (Ctrl+Z / Cmd+Z / Ctrl+Y)
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+      if (isCtrlOrCmd) {
+        if (e.key === "z" || e.key === "Z") {
+          e.preventDefault();
+          if (e.shiftKey) {
+            redo();
+          } else {
+            undo();
+          }
+          return;
+        }
+        if (e.key === "y" || e.key === "Y") {
+          e.preventDefault();
+          redo();
+          return;
+        }
+      }
 
       if (e.code === "Space" && !isSpacePressed) {
         e.preventDefault();
@@ -265,11 +393,15 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
         case "P":
           setActiveTool("freehand");
           break;
+        case "t":
+        case "T":
+          setActiveTool("text");
+          break;
         case "Delete":
         case "Backspace": {
           const ids = useCanvasStore.getState().selectedElementIds;
           if (ids.length === 0) break;
-          ids.forEach((id) => removeElement(id));
+          removeElements(ids);
           clearSelection();
           break;
         }
@@ -286,9 +418,16 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [isSpacePressed, setActiveTool, removeElement, clearSelection]);
+  }, [
+    isSpacePressed,
+    undo,
+    redo,
+    setActiveTool,
+    removeElements,
+    clearSelection,
+  ]);
 
-  // ── 5. Wheel zoom ─────────────────────────────────────────────────────────
+  // ── 6. Wheel zoom ─────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -313,10 +452,50 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
     return screenToWorld(clientX - rect.left, clientY - rect.top, useCanvasStore.getState().viewport);
   };
 
+  const startTextEditing = useCallback(
+    (existingElement?: TextElement, worldPos?: Point) => {
+      const state = useCanvasStore.getState();
+      const initialElements = [...state.elements];
+
+      if (existingElement) {
+        const session: TextEditingSession = {
+          id: existingElement.id,
+          worldX: existingElement.x,
+          worldY: existingElement.y,
+          text: existingElement.text,
+          fontSize: existingElement.fontSize || 20,
+          fontFamily: existingElement.fontFamily || "Inter, sans-serif",
+          strokeColor: existingElement.strokeColor || "#f8fafc",
+          initialElements,
+        };
+        editingSessionRef.current = session;
+        setEditingSession(session);
+      } else if (worldPos) {
+        const session: TextEditingSession = {
+          worldX: worldPos.x,
+          worldY: worldPos.y,
+          text: "",
+          fontSize: 20,
+          fontFamily: "Inter, sans-serif",
+          strokeColor: "#f8fafc",
+          initialElements,
+        };
+        editingSessionRef.current = session;
+        setEditingSession(session);
+      }
+    },
+    []
+  );
+
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLCanvasElement>) => {
       const canvas = canvasRef.current;
       if (!canvas) return;
+
+      // Commit any active text editing when clicking canvas
+      if (editingSessionRef.current) {
+        commitTextEditing();
+      }
 
       const { activeTool: tool, viewport: vp, elements: els, selectedElementIds: selIds } =
         useCanvasStore.getState();
@@ -351,9 +530,21 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
         return;
       }
 
+      // ── TEXT TOOL ─────────────────────────────────────────────────────────
+      if (tool === "text") {
+        e.preventDefault();
+        const hit = hitTestAll(els, worldPt.x, worldPt.y);
+        if (hit && hit.type === "text") {
+          startTextEditing(hit as TextElement);
+        } else {
+          startTextEditing(undefined, worldPt);
+        }
+        return;
+      }
+
       // ── SELECT TOOL ───────────────────────────────────────────────────────
       if (tool === "select") {
-        // Check rotation handle first
+        // Check rotation and resize handles first
         const selected = els.filter((el) => selIds.includes(el.id));
         const selBounds = getUnionBounds(selected);
         if (selBounds) {
@@ -365,7 +556,10 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
             activeHandleRef.current = hitHandle;
             originalBoundsRef.current = { ...selBounds };
 
-            // Save originals for resize
+            // Save snapshot of all elements before transformation
+            dragStartElementsSnapshotRef.current = [...els];
+            hasTransformedRef.current = false;
+
             const map = new Map<string, CanvasElement>();
             selected.forEach((el) => map.set(el.id, { ...el }));
             originalElementsRef.current = map;
@@ -391,21 +585,27 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
         const hit = hitTestAll(els, worldPt.x, worldPt.y);
 
         if (hit) {
-          // Shift-click toggles element in selection
           if (e.shiftKey) {
+            // Shift-click toggles element in selection
             if (selIds.includes(hit.id)) {
               setSelectedElementIds(selIds.filter((id) => id !== hit.id));
             } else {
               setSelectedElementIds([...selIds, hit.id]);
             }
           } else {
-            // If clicking an already-selected element, start moving
+            // If already selected, prepare to move
             const newSel = selIds.includes(hit.id) ? selIds : [hit.id];
             setSelectedElementIds(newSel);
             const updated = useCanvasStore.getState();
+
             canvas.setPointerCapture(e.pointerId);
             interactionModeRef.current = "moving";
             moveStartWorldRef.current = worldPt;
+
+            // Save snapshot before move begins
+            dragStartElementsSnapshotRef.current = [...updated.elements];
+            hasTransformedRef.current = false;
+
             const map = new Map<string, CanvasElement>();
             updated.elements
               .filter((el) => newSel.includes(el.id))
@@ -438,7 +638,27 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
         previewElementRef.current = null;
       }
     },
-    [isSpacePressed, removeElement, setSelectedElementIds, clearSelection, triggerRender]
+    [
+      commitTextEditing,
+      isSpacePressed,
+      removeElement,
+      startTextEditing,
+      setSelectedElementIds,
+      clearSelection,
+      triggerRender,
+    ]
+  );
+
+  const handleDoubleClick = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      e.preventDefault();
+      const worldPt = getCanvasWorld(e.clientX, e.clientY);
+      const hit = hitTestAll(useCanvasStore.getState().elements, worldPt.x, worldPt.y);
+      if (hit && hit.type === "text") {
+        startTextEditing(hit as TextElement);
+      }
+    },
+    [startTextEditing]
   );
 
   const handlePointerMove = useCallback(
@@ -468,11 +688,14 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
         const dx = worldPt.x - moveStartWorldRef.current.x;
         const dy = worldPt.y - moveStartWorldRef.current.y;
 
+        if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+          hasTransformedRef.current = true;
+        }
+
         state.selectedElementIds.forEach((id) => {
           const orig = originalElementsRef.current.get(id);
           if (!orig) return;
           const moved = translateElement(orig, dx, dy);
-          // Directly update via store without dispatching React state per move
           useCanvasStore.getState().updateElement(id, moved as Partial<CanvasElement>);
         });
         triggerRender();
@@ -484,6 +707,8 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
         const worldPt = getCanvasWorld(e.clientX, e.clientY);
         const handle = activeHandleRef.current;
         const origBounds = originalBoundsRef.current;
+
+        hasTransformedRef.current = true;
 
         state.selectedElementIds.forEach((id) => {
           const orig = originalElementsRef.current.get(id);
@@ -502,6 +727,10 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
         const currentAngle = Math.atan2(worldPt.y - center.y, worldPt.x - center.x);
         const deltaAngle =
           ((currentAngle - rotateStartAngleRef.current) * 180) / Math.PI;
+
+        if (Math.abs(deltaAngle) > 0.5) {
+          hasTransformedRef.current = true;
+        }
 
         state.selectedElementIds.forEach((id) => {
           const orig = originalElementsRef.current.get(id);
@@ -628,12 +857,20 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
 
       if (mode === "moving" || mode === "resizing" || mode === "rotating") {
         releaseCapture();
+
+        // Commit single history entry if transformation actually happened
+        if (hasTransformedRef.current && dragStartElementsSnapshotRef.current) {
+          commitSnapshot(dragStartElementsSnapshotRef.current);
+        }
+
         interactionModeRef.current = "idle";
         moveStartWorldRef.current = null;
         activeHandleRef.current = null;
         rotateCenterRef.current = null;
         originalElementsRef.current = new Map();
         originalBoundsRef.current = null;
+        dragStartElementsSnapshotRef.current = null;
+        hasTransformedRef.current = false;
         triggerRender();
         return;
       }
@@ -664,10 +901,10 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
         return;
       }
     },
-    [addElement, triggerRender]
+    [addElement, commitSnapshot, triggerRender]
   );
 
-  // ── Cursor ────────────────────────────────────────────────────────────────
+  // ── Dynamic Cursor ────────────────────────────────────────────────────────
   let cursorClass = "cursor-default";
   if (isPanning) {
     cursorClass = "cursor-grabbing";
@@ -675,9 +912,16 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
     cursorClass = "cursor-grab";
   } else if (["rectangle", "ellipse", "line", "arrow", "freehand"].includes(activeTool)) {
     cursorClass = "cursor-crosshair";
+  } else if (activeTool === "text") {
+    cursorClass = "cursor-text";
   } else if (activeTool === "eraser") {
     cursorClass = "cursor-crosshair";
   }
+
+  // Calculate screen position for temporary text editor
+  const textEditorScreenPos = editingSession
+    ? worldToScreen(editingSession.worldX, editingSession.worldY, viewport)
+    : { x: 0, y: 0 };
 
   return (
     <div
@@ -694,8 +938,56 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        onDoubleClick={handleDoubleClick}
         className={`absolute inset-0 block touch-none ${cursorClass}`}
       />
+
+      {/* Temporary Floating Textarea Overlay */}
+      {editingSession && (
+        <textarea
+          ref={textareaRef}
+          autoFocus
+          value={editingSession.text}
+          onChange={(e) => {
+            const val = e.target.value;
+            setEditingSession((prev) => {
+              if (!prev) return null;
+              const next = { ...prev, text: val };
+              editingSessionRef.current = next;
+              return next;
+            });
+          }}
+          onBlur={commitTextEditing}
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Escape") {
+              e.preventDefault();
+              editingSessionRef.current = null;
+              setEditingSession(null);
+            } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault();
+              commitTextEditing();
+            }
+          }}
+          style={{
+            position: "absolute",
+            left: `${textEditorScreenPos.x}px`,
+            top: `${textEditorScreenPos.y}px`,
+            fontSize: `${Math.max(12, editingSession.fontSize * viewport.zoom)}px`,
+            fontFamily: editingSession.fontFamily,
+            color: editingSession.strokeColor,
+            lineHeight: 1.25,
+            zIndex: 50,
+          }}
+          rows={Math.max(1, editingSession.text.split("\n").length)}
+          placeholder="Type something..."
+          className="min-w-[120px] max-w-[500px] resize-none overflow-hidden rounded-lg border border-accent/60 bg-bg-secondary/90 px-2 py-1 shadow-2xl backdrop-blur-md outline-none text-text-primary caret-accent"
+        />
+      )}
 
       {/* Floating Glassmorphism Main Toolbar HUD */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 rounded-2xl border border-border/80 bg-bg-secondary/80 backdrop-blur-xl p-1.5 shadow-2xl shadow-black/50">
@@ -716,6 +1008,36 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
             </button>
           );
         })}
+
+        <div className="h-4 w-px bg-border my-auto mx-1" />
+
+        {/* Undo Button */}
+        <button
+          onClick={() => undo()}
+          disabled={past.length === 0}
+          title="Undo (Ctrl+Z)"
+          className={`flex h-9 w-9 items-center justify-center rounded-xl transition-all ${
+            past.length === 0
+              ? "text-text-muted/30 cursor-not-allowed"
+              : "text-text-secondary hover:bg-surface-glass-hover hover:text-text-primary active:scale-95"
+          }`}
+        >
+          <Undo2 className="h-4 w-4" />
+        </button>
+
+        {/* Redo Button */}
+        <button
+          onClick={() => redo()}
+          disabled={future.length === 0}
+          title="Redo (Ctrl+Shift+Z / Ctrl+Y)"
+          className={`flex h-9 w-9 items-center justify-center rounded-xl transition-all ${
+            future.length === 0
+              ? "text-text-muted/30 cursor-not-allowed"
+              : "text-text-secondary hover:bg-surface-glass-hover hover:text-text-primary active:scale-95"
+          }`}
+        >
+          <Redo2 className="h-4 w-4" />
+        </button>
       </div>
 
       {/* Bottom Left: Board & Scene Info HUD */}

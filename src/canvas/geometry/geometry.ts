@@ -6,6 +6,7 @@
  */
 
 import { CanvasElement, Point } from "@/types/canvas";
+import { measureText } from "./text-measurement";
 
 export interface BoundingBox {
   x: number;
@@ -371,6 +372,26 @@ export function resizeElement(
       width: nw,
       height: nh,
       points: scaledPoints,
+    };
+  }
+
+  if (orig.type === "text") {
+    const scale = (scaleX + scaleY) / 2;
+    const newFontSize = Math.max(8, Math.round(orig.fontSize * scale));
+    const measured = measureText(
+      orig.text,
+      newFontSize,
+      orig.fontFamily,
+      orig.fontWeight
+    );
+    return {
+      ...orig,
+      x: nx,
+      y: ny,
+      fontSize: newFontSize,
+      width: measured.width,
+      height: measured.height,
+      lineHeight: measured.lineHeight,
     };
   }
 

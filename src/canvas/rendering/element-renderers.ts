@@ -142,16 +142,35 @@ export function renderText(
   ctx: CanvasRenderingContext2D,
   element: TextElement
 ): void {
-  const { x, y, text, fontSize, fontFamily, strokeColor, opacity, textAlign = "left" } = element;
+  const {
+    x,
+    y,
+    text,
+    fontSize,
+    fontFamily,
+    fontWeight = "normal",
+    strokeColor,
+    opacity,
+    textAlign = "left",
+    lineHeight: customLineHeight,
+  } = element;
+
+  if (!text) return;
 
   ctx.save();
   ctx.globalAlpha = opacity;
   ctx.fillStyle = strokeColor;
-  ctx.font = `${fontSize}px ${fontFamily}`;
+  ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
   ctx.textAlign = textAlign;
   ctx.textBaseline = "top";
 
-  ctx.fillText(text, x, y);
+  const lineHeight = customLineHeight || Math.round(fontSize * 1.25);
+  const lines = text.split("\n");
+
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], x, y + i * lineHeight);
+  }
+
   ctx.restore();
 }
 

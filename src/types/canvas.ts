@@ -78,7 +78,9 @@ export interface TextElement extends BaseElement {
   text: string;
   fontSize: number;
   fontFamily: string;
+  fontWeight?: string;
   textAlign?: "left" | "center" | "right";
+  lineHeight?: number;
 }
 
 export type CanvasElement =

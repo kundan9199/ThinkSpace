@@ -101,7 +101,31 @@ Canvas state is isolated from application/auth state using a dedicated Zustand s
 - **Keyboard Shortcuts**:
   - `V` = Select, `H` = Hand/Pan, `R` = Rectangle, `O` = Ellipse, `L` = Line, `A` = Arrow, `P` = Pencil (Freehand), `Delete`/`Backspace` = Delete, `Space` (hold) = Quick Pan.
 
-### 6. Rendering Pipeline (`src/canvas/rendering/`)
+### 6. Text & History Architecture (Phase 3.4) (`src/canvas/geometry/text-measurement.ts`, `src/store/canvas/canvas-store.ts`)
+- **Text Element Model & Measurement**:
+  - `TextElement`: `text`, `fontSize`, `fontFamily`, `fontWeight`, `textAlign`, `lineHeight`.
+  - `measureText`: Uses an offscreen Canvas 2D context to accurately measure line widths, total height, and line count for multiline text.
+  - Multi-line text rendered in 2D canvas with consistent line height spacing (`lineHeight = fontSize * 1.25`).
+- **Text Editing UX**:
+  - Temporary floating `<textarea>` positioned over the canvas via `worldToScreen(x, y, viewport)`.
+  - Font size scales dynamically with `fontSize * viewport.zoom` to match canvas text seamlessly during editing.
+  - Keyboard: `Ctrl+Enter` / `Cmd+Enter` or click outside / blur commits text; `Escape` cancels; `Shift+Enter` / `Enter` adds newline.
+  - Empty text is automatically discarded without committing empty elements.
+  - Double-clicking text or clicking in text tool mode activates editing for existing text elements.
+- **History Architecture (Undo / Redo)**:
+  - Managed via dedicated `past` and `future` stacks in Zustand with a bounded capacity of `MAX_HISTORY = 100`.
+  - **Discrete History Boundaries**:
+    - Creation (Shapes, Freehand, Text): Single entry added to `past` on commit; `future` cleared.
+    - Transformations (Move, Resize, Rotate): Initial snapshot saved at `pointerdown`, live mutations applied during drag at 60fps, and exactly **one** snapshot committed to `past` on `pointerup`.
+    - Deletions: Bulk removal (`removeElements`) snapshots `past` once.
+    - Text Editing: Snapshot committed on text blur/commit.
+  - **Transient vs Persistent State**:
+    - Transient states (pointer position, hover, active tool, selection changes, camera pan/zoom, live textarea state) are strictly excluded from history.
+  - **Shortcuts & HUD**:
+    - Shortcuts: `Ctrl+Z` / `Cmd+Z` (Undo), `Ctrl+Shift+Z` / `Cmd+Shift+Z` / `Ctrl+Y` (Redo), `T` (Text tool).
+    - Toolbar HUD features disabled/enabled states for Undo and Redo based on history stack depth.
+
+### 7. Rendering Pipeline (`src/canvas/rendering/`)
 - **`CanvasRenderer`**: High-performance class controlling the 2D rendering loop via `requestAnimationFrame`.
 - **`devicePixelRatio` Handling**: Scaling the canvas backing store resolution (`canvas.width = cssWidth * dpr`) while setting CSS size (`canvas.style.width = cssWidth + "px"`) ensures crisp, high-DPI rendering on Retina screens without distortion.
 - **Camera Matrix**: `applyCameraTransform` transforms world coordinates to screen pixels using `ctx.scale(dpr)` → `ctx.translate(panX, panY)` → `ctx.scale(zoom)`.

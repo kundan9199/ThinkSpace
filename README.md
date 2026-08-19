@@ -11,6 +11,7 @@ A modern, production-quality collaborative whiteboard application. Draw, brainst
   - 3.1 Canvas Foundation (Discriminated union scene model, Zustand store, pure Canvas 2D render loop, high-DPI scaling).
   - 3.2 Camera & Basic Tools (Cursor-centered zoom, Pan via middle mouse / Space+drag / Hand tool, Rect / Ellipse / Line / Arrow shapes with rAF preview).
   - 3.3 Drawing & Object Interaction (Smooth freehand pencil drawing with `perfect-freehand`, single/multi-selection, hit testing, moving, resizing with 8 handles, rotating with angle offset, eraser tool, and keyboard shortcuts).
+  - 3.4 Text & History (Multiline text tool with offscreen measurement, floating textarea editor, Undo/Redo history stack with 100 snapshots, HUD controls, and transformation history coalescing).
 
 ## Features
 
@@ -18,7 +19,7 @@ A modern, production-quality collaborative whiteboard application. Draw, brainst
 - 🔐 **Server-Side Authorization (Phase 1 & 2)** — Supabase Auth email/password, session persistence, and server-side authorization ensuring only board owners can rename/delete boards.
 - 🗄️ **Database Integration** — Prisma 7 ORM configured with Supabase PostgreSQL datasource for `User`, `Board`, `BoardElement`, and `BoardParticipant` models.
 - 🎨 **Futuristic Design System** — Dark Glassmorphism theme with accessible controls, responsive forms, and glowing cyan accents.
-- ✏️ **Canvas Engine (Phase 3)** — Geometric shapes, smooth pressure-sensitive freehand drawing, full object selection, resize handles, rotation, translation, and eraser.
+- ✏️ **Canvas Engine (Phase 3)** — Geometric shapes, smooth freehand drawing, multiline text elements, object selection, resize handles, rotation, translation, eraser, and full Undo/Redo history.
 - 🔄 **Real-time Collaboration (Coming in Phase 7 & 8)** — Socket.IO multiplayer drawing and live cursors.
 
 ## Tech Stack
