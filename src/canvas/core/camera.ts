@@ -78,3 +78,45 @@ export function applyCameraTransform(
   ctx.translate(panX, panY);
   ctx.scale(zoom, zoom);
 }
+
+/**
+ * Calculates new zoom and pan offsets so that all scene content (or specified bounds)
+ * is centered and completely visible within the canvas viewport with padding.
+ */
+export function calculateFitToContent(
+  bounds: { x: number; y: number; width: number; height: number } | null,
+  viewportWidth: number,
+  viewportHeight: number,
+  padding: number = 64,
+  minZoom = 0.1,
+  maxZoom = 3.0
+): { zoom: number; panX: number; panY: number } {
+  if (
+    !bounds ||
+    bounds.width <= 0 ||
+    bounds.height <= 0 ||
+    viewportWidth <= 0 ||
+    viewportHeight <= 0
+  ) {
+    return { zoom: 1.0, panX: 0, panY: 0 };
+  }
+
+  const availableWidth = Math.max(10, viewportWidth - padding * 2);
+  const availableHeight = Math.max(10, viewportHeight - padding * 2);
+
+  const zoomX = availableWidth / bounds.width;
+  const zoomY = availableHeight / bounds.height;
+  const targetZoom = Math.min(maxZoom, Math.max(minZoom, Math.min(zoomX, zoomY)));
+
+  const centerX = bounds.x + bounds.width / 2;
+  const centerY = bounds.y + bounds.height / 2;
+
+  const panX = viewportWidth / 2 - centerX * targetZoom;
+  const panY = viewportHeight / 2 - centerY * targetZoom;
+
+  return {
+    zoom: targetZoom,
+    panX,
+    panY,
+  };
+}

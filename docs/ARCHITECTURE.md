@@ -125,11 +125,27 @@ Canvas state is isolated from application/auth state using a dedicated Zustand s
     - Shortcuts: `Ctrl+Z` / `Cmd+Z` (Undo), `Ctrl+Shift+Z` / `Cmd+Shift+Z` / `Ctrl+Y` (Redo), `T` (Text tool).
     - Toolbar HUD features disabled/enabled states for Undo and Redo based on history stack depth.
 
-### 7. Rendering Pipeline (`src/canvas/rendering/`)
-- **`CanvasRenderer`**: High-performance class controlling the 2D rendering loop via `requestAnimationFrame`.
-- **`devicePixelRatio` Handling**: Scaling the canvas backing store resolution (`canvas.width = cssWidth * dpr`) while setting CSS size (`canvas.style.width = cssWidth + "px"`) ensures crisp, high-DPI rendering on Retina screens without distortion.
-- **Camera Matrix**: `applyCameraTransform` transforms world coordinates to screen pixels using `ctx.scale(dpr)` → `ctx.translate(panX, panY)` → `ctx.scale(zoom)`.
-- **Layering Order**: Background → Sorted Scene Elements → Live Drag Preview → Freehand Drawing Preview → Selection Bounding Box & Handles.
+### 7. Element Styling & Canvas Appearance (Phase 3.5) (`src/canvas/components/properties-panel.tsx`, `src/canvas/components/canvas-background-control.tsx`)
+- **Properties Panel**: Context-aware floating glassmorphism panel for selected elements with controls for stroke color, background fill, stroke width, stroke style (solid/dashed/dotted), sloppiness (precise/normal/sketchy), corner roundness (sharp/rounded), opacity slider, text typography (font size, font family, bold, italic, underline, alignment), and z-index layer ordering.
+- **Canvas Background**: Customizable canvas background color presets with real-time viewport updates and discrete history undo/redo support.
+
+### 8. Canvas UX, Clipboard & Export (Phase 3.6) (`src/canvas/core/clipboard.ts`, `src/canvas/core/export.ts`, `src/canvas/components/export-menu.tsx`)
+- **Clipboard & Duplication**:
+  - `Ctrl/Cmd+C`: Deep-copies selected elements to in-memory store and system clipboard JSON.
+  - `Ctrl/Cmd+X`: Copies and removes selected elements as a single undoable action.
+  - `Ctrl/Cmd+V`: Pastes copied elements with new IDs, +20px world offset, and preserved relative z-index as a single atomic history step.
+  - `Ctrl/Cmd+D`: Duplicates selected elements with fresh IDs and offset as a single undoable step.
+  - External clipboard validation: Malformed/non-ThinkSpace clipboard payloads fail safely without corrupting canvas state.
+- **Select All & Editor Protection**:
+  - `Ctrl/Cmd+A`: Selects all canvas elements when canvas is focused; preserved native text selection inside text areas, inputs, and form controls.
+- **Keyboard Navigation**:
+  - Arrow keys: 1px movement (10px with Shift) in camera-independent world coordinates; coalesced into a single undo step across rapid key presses.
+- **Enhanced Zoom HUD & Fit to Content**:
+  - Zoom HUD with Zoom In, Zoom Out, Reset to 100%, and Fit to Content.
+  - `calculateFitToContent`: Accurately frames all scene elements within viewport with 64px padding; resets to default viewport if scene is empty.
+- **High-Resolution PNG Export**:
+  - Offscreen 2D canvas export pipeline reusing core `renderElement` functions at 2x scale with 4096px bounds protection.
+  - Two modes: Full Canvas Export (all elements + canvas background) and Selection Export (selected elements with tight bounding box padding). Excludes HUD and handles.
 
 ---
 

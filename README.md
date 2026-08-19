@@ -12,6 +12,8 @@ A modern, production-quality collaborative whiteboard application. Draw, brainst
   - 3.2 Camera & Basic Tools (Cursor-centered zoom, Pan via middle mouse / Space+drag / Hand tool, Rect / Ellipse / Line / Arrow shapes with rAF preview).
   - 3.3 Drawing & Object Interaction (Smooth freehand pencil drawing with `perfect-freehand`, single/multi-selection, hit testing, moving, resizing with 8 handles, rotating with angle offset, eraser tool, and keyboard shortcuts).
   - 3.4 Text & History (Multiline text tool with offscreen measurement, floating textarea editor, Undo/Redo history stack with 100 snapshots, HUD controls, and transformation history coalescing).
+  - 3.5 Element Styling & Canvas Appearance (Properties panel, stroke & fill colors, stroke width, styles, sloppiness, roundness, opacity, typography, layer ordering, and customizable canvas background).
+  - 3.6 Canvas UX, Clipboard & Export (Copy, Cut, Paste with new IDs and offsets, Duplicate, Select All, Arrow key movement with history coalescing, enhanced Zoom HUD, Fit to Content, and 2x High-Res PNG Export for full canvas & selection).
 
 ## Features
 

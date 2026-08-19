@@ -31,6 +31,7 @@ export interface CanvasState {
   // Actions
   setElements: (elements: CanvasElement[]) => void;
   addElement: (element: CanvasElement) => void;
+  addElements: (elements: CanvasElement[]) => void;
   updateElement: (id: string, updates: Partial<CanvasElement>) => void;
   updateElements: (ids: string[], updates: Partial<CanvasElement>) => void;
   removeElement: (id: string) => void;
@@ -130,6 +131,19 @@ export const useCanvasStore = create<CanvasState>((set) => ({
       future: [],
       elements: [...state.elements, element],
     })),
+
+  addElements: (newElements) =>
+    set((state) => {
+      if (!newElements || newElements.length === 0) return state;
+      return {
+        past: [
+          ...state.past.slice(-(MAX_HISTORY - 1)),
+          { elements: state.elements, canvasBackgroundColor: state.canvasBackgroundColor },
+        ],
+        future: [],
+        elements: [...state.elements, ...newElements],
+      };
+    }),
 
   updateElement: (id, updates) =>
     set((state) => ({

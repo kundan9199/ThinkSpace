@@ -3,12 +3,18 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useCanvasStore } from "@/store/canvas/canvas-store";
 import { CanvasRenderer } from "../rendering/canvas-renderer";
-import { screenToWorld, worldToScreen, zoomAtPoint } from "../core/camera";
+import { screenToWorld, worldToScreen, zoomAtPoint, calculateFitToContent } from "../core/camera";
 import { ToolType, CanvasElement, Point, TextElement } from "@/types/canvas";
 import { BoardDetails } from "@/lib/board/actions";
 import { measureText } from "../geometry/text-measurement";
 import { PropertiesPanel } from "./properties-panel";
 import { CanvasBackgroundControl } from "./canvas-background-control";
+import { ExportMenu } from "./export-menu";
+import {
+  copyElementsToClipboard,
+  getElementsFromClipboard,
+  cloneElementsWithNewIds,
+} from "../core/clipboard";
 import {
   getUnionBounds,
   getSelectionHandles,
@@ -34,6 +40,7 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
+  Maximize2,
   Layers,
   Undo2,
   Redo2,
@@ -123,6 +130,10 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
   const dragStartElementsSnapshotRef = useRef<CanvasElement[] | null>(null);
   const hasTransformedRef = useRef(false);
 
+  // Keyboard arrow movement coalescing refs
+  const arrowMoveSnapshotRef = useRef<CanvasElement[] | null>(null);
+  const arrowMoveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   // ── Zustand Store ─────────────────────────────────────────────────────────
   const elements = useCanvasStore((s) => s.elements);
   const selectedElementIds = useCanvasStore((s) => s.selectedElementIds);
@@ -133,6 +144,8 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
   const future = useCanvasStore((s) => s.future);
 
   const addElement = useCanvasStore((s) => s.addElement);
+  const addElements = useCanvasStore((s) => s.addElements);
+  const updateElement = useCanvasStore((s) => s.updateElement);
   const removeElement = useCanvasStore((s) => s.removeElement);
   const removeElements = useCanvasStore((s) => s.removeElements);
   const commitSnapshot = useCanvasStore((s) => s.commitSnapshot);
@@ -326,29 +339,48 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
     }
   }, [isEditing]);
 
-  // ── 5. Keyboard Shortcuts & Undo/Redo ─────────────────────────────────────
+  // ── 5. Keyboard Shortcuts & Undo/Redo / Clipboard ───────────────────────
   useEffect(() => {
-    const isTyping = () => {
+    const isTyping = (target: EventTarget | null) => {
       if (editingSessionRef.current !== null) return true;
-      const el = document.activeElement;
-      if (!el) return false;
-      const tag = el.tagName;
-      return (
+      if (!target || !(target instanceof HTMLElement)) return false;
+      const tag = target.tagName.toUpperCase();
+      if (
         tag === "INPUT" ||
         tag === "TEXTAREA" ||
-        (el as HTMLElement).isContentEditable ||
-        (el as HTMLElement).contentEditable === "true"
-      );
+        tag === "SELECT" ||
+        target.isContentEditable ||
+        target.getAttribute("contenteditable") === "true"
+      ) {
+        return true;
+      }
+      if (target.closest("input, textarea, select, [contenteditable='true']")) {
+        return true;
+      }
+      return false;
+    };
+
+    const flushArrowMovement = () => {
+      if (arrowMoveTimerRef.current) {
+        clearTimeout(arrowMoveTimerRef.current);
+        arrowMoveTimerRef.current = null;
+      }
+      if (arrowMoveSnapshotRef.current) {
+        commitSnapshot(arrowMoveSnapshotRef.current);
+        arrowMoveSnapshotRef.current = null;
+      }
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isTyping()) return;
+      if (isTyping(e.target)) return;
 
-      // Handle Undo / Redo shortcuts (Ctrl+Z / Cmd+Z / Ctrl+Y)
       const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+
+      // Handle Ctrl/Cmd Shortcuts
       if (isCtrlOrCmd) {
         if (e.key === "z" || e.key === "Z") {
           e.preventDefault();
+          flushArrowMovement();
           if (e.shiftKey) {
             redo();
           } else {
@@ -358,15 +390,109 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
         }
         if (e.key === "y" || e.key === "Y") {
           e.preventDefault();
+          flushArrowMovement();
           redo();
+          return;
+        }
+        if (e.key === "a" || e.key === "A") {
+          e.preventDefault();
+          setSelectedElementIds(useCanvasStore.getState().elements.map((el) => el.id));
+          return;
+        }
+        if (e.key === "c" || e.key === "C") {
+          e.preventDefault();
+          const state = useCanvasStore.getState();
+          const sel = state.elements.filter((el) => state.selectedElementIds.includes(el.id));
+          copyElementsToClipboard(sel);
+          return;
+        }
+        if (e.key === "x" || e.key === "X") {
+          e.preventDefault();
+          flushArrowMovement();
+          const state = useCanvasStore.getState();
+          const sel = state.elements.filter((el) => state.selectedElementIds.includes(el.id));
+          if (sel.length > 0) {
+            copyElementsToClipboard(sel);
+            removeElements(state.selectedElementIds);
+            clearSelection();
+          }
+          return;
+        }
+        if (e.key === "v" || e.key === "V") {
+          e.preventDefault();
+          flushArrowMovement();
+          const state = useCanvasStore.getState();
+          const maxZIndex = state.elements.reduce((max, el) => Math.max(max, el.zIndex ?? 0), 0);
+          getElementsFromClipboard(maxZIndex).then((pasted) => {
+            if (pasted && pasted.length > 0) {
+              addElements(pasted);
+              setSelectedElementIds(pasted.map((el) => el.id));
+            }
+          });
+          return;
+        }
+        if (e.key === "d" || e.key === "D") {
+          e.preventDefault();
+          flushArrowMovement();
+          const state = useCanvasStore.getState();
+          const sel = state.elements.filter((el) => state.selectedElementIds.includes(el.id));
+          if (sel.length > 0) {
+            const maxZIndex = state.elements.reduce((max, el) => Math.max(max, el.zIndex ?? 0), 0);
+            const clones = cloneElementsWithNewIds(sel, { x: 20, y: 20 }, maxZIndex);
+            addElements(clones);
+            setSelectedElementIds(clones.map((el) => el.id));
+          }
           return;
         }
       }
 
+      // Space bar for panning
       if (e.code === "Space" && !isSpacePressed) {
         e.preventDefault();
         setIsSpacePressed(true);
         return;
+      }
+
+      // Arrow keys movement
+      if (
+        e.key === "ArrowUp" ||
+        e.key === "ArrowDown" ||
+        e.key === "ArrowLeft" ||
+        e.key === "ArrowRight"
+      ) {
+        const state = useCanvasStore.getState();
+        if (state.selectedElementIds.length > 0) {
+          e.preventDefault();
+          const step = e.shiftKey ? 10 : 1;
+          let dx = 0;
+          let dy = 0;
+          if (e.key === "ArrowLeft") dx = -step;
+          else if (e.key === "ArrowRight") dx = step;
+          else if (e.key === "ArrowUp") dy = -step;
+          else if (e.key === "ArrowDown") dy = step;
+
+          if (!arrowMoveSnapshotRef.current) {
+            arrowMoveSnapshotRef.current = [...state.elements];
+          }
+
+          state.selectedElementIds.forEach((id) => {
+            const el = state.elements.find((item) => item.id === id);
+            if (el) {
+              updateElement(id, translateElement(el, dx, dy));
+            }
+          });
+
+          if (arrowMoveTimerRef.current) {
+            clearTimeout(arrowMoveTimerRef.current);
+          }
+          arrowMoveTimerRef.current = setTimeout(() => {
+            if (arrowMoveSnapshotRef.current) {
+              commitSnapshot(arrowMoveSnapshotRef.current);
+              arrowMoveSnapshotRef.current = null;
+            }
+          }, 400);
+          return;
+        }
       }
 
       switch (e.key) {
@@ -404,6 +530,7 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
           break;
         case "Delete":
         case "Backspace": {
+          flushArrowMovement();
           const ids = useCanvasStore.getState().selectedElementIds;
           if (ids.length === 0) break;
           removeElements(ids);
@@ -422,14 +549,22 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
+      if (arrowMoveTimerRef.current) {
+        clearTimeout(arrowMoveTimerRef.current);
+      }
     };
   }, [
     isSpacePressed,
     undo,
     redo,
     setActiveTool,
+    addElement,
+    addElements,
+    updateElement,
     removeElements,
+    setSelectedElementIds,
     clearSelection,
+    commitSnapshot,
   ]);
 
   // ── 6. Wheel zoom ─────────────────────────────────────────────────────────
@@ -1048,6 +1183,11 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
       {/* Floating Properties Panel (Contextual when elements are selected) */}
       <PropertiesPanel />
 
+      {/* Top Right: Export & Canvas Actions HUD */}
+      <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+        <ExportMenu boardTitle={board.title} />
+      </div>
+
       {/* Bottom Left: Board & Scene Info HUD + Canvas Background Control */}
       <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2">
         <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-bg-secondary/70 backdrop-blur-md px-3 py-1.5 text-xs text-text-muted font-mono shadow-lg">
@@ -1070,15 +1210,21 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
               zoomAtPoint(dimensions.width / 2, dimensions.height / 2, 1 / 1.1, viewport, 0.1, 10.0)
             )
           }
-          title="Zoom Out"
+          title="Zoom Out (-)"
+          aria-label="Zoom Out"
           className="flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary hover:bg-surface-glass-hover hover:text-text-primary transition-all"
         >
           <ZoomOut className="h-4 w-4" />
         </button>
 
-        <span className="w-12 text-center text-xs font-mono font-semibold text-text-primary">
+        <button
+          onClick={() => setViewport({ zoom: 1.0 })}
+          title="Reset Zoom to 100%"
+          aria-label="Reset Zoom to 100%"
+          className="w-12 text-center text-xs font-mono font-semibold text-text-primary hover:text-accent transition-colors"
+        >
           {Math.round(viewport.zoom * 100)}%
-        </span>
+        </button>
 
         <button
           onClick={() =>
@@ -1086,7 +1232,8 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
               zoomAtPoint(dimensions.width / 2, dimensions.height / 2, 1.1, viewport, 0.1, 10.0)
             )
           }
-          title="Zoom In"
+          title="Zoom In (+)"
+          aria-label="Zoom In"
           className="flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary hover:bg-surface-glass-hover hover:text-text-primary transition-all"
         >
           <ZoomIn className="h-4 w-4" />
@@ -1094,9 +1241,28 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
 
         <div className="h-4 w-px bg-border my-auto mx-0.5" />
 
+        {/* Fit to Content Button */}
+        <button
+          onClick={() => {
+            if (elements.length === 0) {
+              resetViewport();
+              return;
+            }
+            const bounds = getUnionBounds(elements);
+            const fit = calculateFitToContent(bounds, dimensions.width, dimensions.height, 64, 0.1, 10.0);
+            setViewport(fit);
+          }}
+          title="Fit to Content"
+          aria-label="Fit to Content"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary hover:bg-surface-glass-hover hover:text-text-primary transition-all"
+        >
+          <Maximize2 className="h-3.5 w-3.5" />
+        </button>
+
         <button
           onClick={() => resetViewport()}
           title="Reset Viewport"
+          aria-label="Reset Viewport"
           className="flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary hover:bg-surface-glass-hover hover:text-text-primary transition-all"
         >
           <RotateCcw className="h-3.5 w-3.5" />

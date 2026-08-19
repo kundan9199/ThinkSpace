@@ -11,6 +11,11 @@ import {
 } from "@/types/canvas";
 import { measureText } from "../geometry/text-measurement";
 import {
+  copyElementsToClipboard,
+  cloneElementsWithNewIds,
+} from "../core/clipboard";
+import { exportCanvasToPng } from "../core/export";
+import {
   AlignLeft,
   AlignCenter,
   AlignRight,
@@ -22,6 +27,9 @@ import {
   ChevronsUp,
   ChevronsDown,
   Trash2,
+  Copy,
+  CopyPlus,
+  Download,
   Layers,
   Sparkles,
 } from "lucide-react";
@@ -63,11 +71,14 @@ export function PropertiesPanel() {
   const elements = useCanvasStore((s) => s.elements);
   const selectedElementIds = useCanvasStore((s) => s.selectedElementIds);
   const activeTool = useCanvasStore((s) => s.activeTool);
+  const canvasBackgroundColor = useCanvasStore((s) => s.canvasBackgroundColor);
 
+  const addElements = useCanvasStore((s) => s.addElements);
   const updateElement = useCanvasStore((s) => s.updateElement);
   const updateElements = useCanvasStore((s) => s.updateElements);
   const commitSnapshot = useCanvasStore((s) => s.commitSnapshot);
   const removeElements = useCanvasStore((s) => s.removeElements);
+  const setSelectedElementIds = useCanvasStore((s) => s.setSelectedElementIds);
   const clearSelection = useCanvasStore((s) => s.clearSelection);
 
   const bringForward = useCanvasStore((s) => s.bringForward);
@@ -146,6 +157,27 @@ export function PropertiesPanel() {
     }
   };
 
+  // Quick Action Handlers
+  const handleCopy = () => {
+    copyElementsToClipboard(selectedElements);
+  };
+
+  const handleDuplicate = () => {
+    const maxZIndex = elements.reduce((max, el) => Math.max(max, el.zIndex ?? 0), 0);
+    const clones = cloneElementsWithNewIds(selectedElements, { x: 20, y: 20 }, maxZIndex);
+    addElements(clones);
+    setSelectedElementIds(clones.map((c) => c.id));
+  };
+
+  const handleExportSelection = () => {
+    exportCanvasToPng({
+      elements,
+      selectedIds: selectedElementIds,
+      canvasBackgroundColor,
+      onlySelected: true,
+    });
+  };
+
   // Title description
   const title =
     selectedElements.length === 1
@@ -163,16 +195,39 @@ export function PropertiesPanel() {
           <Sparkles className="h-3.5 w-3.5 text-accent" />
           <span>{title}</span>
         </div>
-        <button
-          onClick={() => {
-            removeElements(selectedElementIds);
-            clearSelection();
-          }}
-          title="Delete selected elements (Delete)"
-          className="p-1 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition-colors"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={handleCopy}
+            title="Copy (Ctrl+C)"
+            className="p-1 rounded-lg text-text-muted hover:text-text-primary hover:bg-white/5 transition-colors"
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={handleDuplicate}
+            title="Duplicate (Ctrl+D)"
+            className="p-1 rounded-lg text-text-muted hover:text-text-primary hover:bg-white/5 transition-colors"
+          >
+            <CopyPlus className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={handleExportSelection}
+            title="Export Selection as PNG"
+            className="p-1 rounded-lg text-text-muted hover:text-accent hover:bg-accent/10 transition-colors"
+          >
+            <Download className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => {
+              removeElements(selectedElementIds);
+              clearSelection();
+            }}
+            title="Delete selected elements (Delete)"
+            className="p-1 rounded-lg text-text-muted hover:text-danger hover:bg-danger/10 transition-colors"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* ── 1. Stroke / Color ────────────────────────────────────────────── */}
