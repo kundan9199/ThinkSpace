@@ -40,7 +40,7 @@ This document outlines the Authentication, Database, Board Workspace, and Canvas
                            Supabase PostgreSQL
 ```
 
-## Canvas Engine Architecture (Phase 3.1)
+## Canvas Engine Architecture
 
 ### 1. Scene Model (`src/types/canvas.ts`)
 The scene model uses TypeScript discriminated unions for type safety without using `any`:
@@ -55,20 +55,32 @@ The scene model uses TypeScript discriminated unions for type safety without usi
 
 ### 2. State Separation (Zustand) (`src/store/canvas/canvas-store.ts`)
 Canvas state is isolated from application/auth state using a dedicated Zustand store `useCanvasStore`:
-- **`elements: CanvasElement[]`**: Scene model objects
+- **`elements: CanvasElement[]`**: Scene model objects in world coordinates
 - **`selectedElementIds: string[]`**: Active element selection
 - **`activeTool: ToolType`**: Selected tool (`select`, `hand`, `rectangle`, `ellipse`, `line`, `arrow`, `freehand`, `text`, `eraser`)
 - **`viewport: ViewportState`**: Camera state (`zoom`, `panX`, `panY`, `dpr`)
 
-### 3. Rendering Pipeline (`src/canvas/rendering/`)
+### 3. Camera System & Coordinate Mapping (Phase 3.2) (`src/canvas/core/camera.ts`)
+- **World to Screen**: `screenX = worldX * zoom + panX`, `screenY = worldY * zoom + panY`
+- **Screen to World**: `worldX = (screenX - panX) / zoom`, `worldY = (screenY - panY) / zoom`
+- **Pan Interaction**: Panning modifies `panX` and `panY` directly via middle mouse drag (`e.button === 1`), Space key + drag, or Hand tool mode.
+- **Cursor-Centered Zoom (`zoomAtPoint`)**:
+  When zooming via mouse wheel, the world point under the cursor is preserved at the same screen location:
+  `newPanX = screenX - worldPoint.x * newZoom`
+  `newPanY = screenY - worldPoint.y * newZoom`
+- **Reset View**: Restores camera to `zoom = 1, panX = 0, panY = 0`.
+
+### 4. Interactive Shape Tools & Temporary Preview (Phase 3.2) (`src/canvas/components/canvas-workspace.tsx`)
+- **Pointer Lifecycle**:
+  - `onPointerDown`: Converts screen click `(clientX - rect.left, clientY - rect.top)` to world coordinates via `screenToWorld`. Starts drawing interaction.
+  - `onPointerMove`: Calculates world dimensions and normalized top-left coordinates supporting negative drag directions. Updates `previewElementRef` (local ref).
+  - `onPointerUp`: If shape size > 2px, assigns a unique ID and commits the element to the Zustand store via `addElement`.
+- **Performance**: Temporary shape drag previews render through `requestAnimationFrame` using `previewElementRef` without dispatching React state updates or polluting Zustand store during drag motion.
+
+### 5. Rendering Pipeline (`src/canvas/rendering/`)
 - **`CanvasRenderer`**: High-performance class controlling the 2D rendering loop via `requestAnimationFrame`.
 - **`devicePixelRatio` Handling**: Scaling the canvas backing store resolution (`canvas.width = cssWidth * dpr`) while setting CSS size (`canvas.style.width = cssWidth + "px"`) ensures crisp, high-DPI rendering on Retina screens without distortion.
-- **Camera Matrix (`src/canvas/core/camera.ts`)**: `applyCameraTransform` transforms world coordinates to screen pixels using `ctx.scale(dpr)` → `ctx.translate(panX, panY)` → `ctx.scale(zoom)`.
-- **Decoupling**: The render loop executes outside React re-render cycles, avoiding React overhead during high-frequency pointer movements.
-
-### 4. Future Multiplayer Extension Points
-- **CRDT / Operational Transformation Ready**: Every scene mutation (`addElement`, `updateElement`, `removeElement`) operates on standard element IDs and JSON-serializable property patches.
-- **Remote Invalidation**: Future WebSocket / Socket.IO events can call `updateElement` or `setElements` directly on `useCanvasStore`, triggering immediate canvas redraws without touching React DOM components.
+- **Camera Matrix**: `applyCameraTransform` transforms world coordinates to screen pixels using `ctx.scale(dpr)` → `ctx.translate(panX, panY)` → `ctx.scale(zoom)`.
 
 ---
 

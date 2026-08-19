@@ -22,7 +22,7 @@ export class CanvasRenderer {
   }
 
   /**
-   * Adjusts the canvas backing store resolution to match the physical device pixels,
+   * Adjusts the canvas backing store resolution to match physical device pixels,
    * keeping the CSS display size sharp on Retina / High-DPI screens.
    */
   public resize(cssWidth: number, cssHeight: number, dpr: number): void {
@@ -45,7 +45,8 @@ export class CanvasRenderer {
     selectedIds: string[],
     viewport: ViewportState,
     cssWidth: number,
-    cssHeight: number
+    cssHeight: number,
+    previewElement?: CanvasElement | null
   ): void {
     if (this.animFrameId !== null) {
       cancelAnimationFrame(this.animFrameId);
@@ -53,7 +54,7 @@ export class CanvasRenderer {
 
     this.animFrameId = requestAnimationFrame(() => {
       this.animFrameId = null;
-      this.renderImmediate(elements, selectedIds, viewport, cssWidth, cssHeight);
+      this.renderImmediate(elements, selectedIds, viewport, cssWidth, cssHeight, previewElement);
     });
   }
 
@@ -65,7 +66,8 @@ export class CanvasRenderer {
     selectedIds: string[],
     viewport: ViewportState,
     cssWidth: number,
-    cssHeight: number
+    cssHeight: number,
+    previewElement?: CanvasElement | null
   ): void {
     if (!this.canvas || !this.ctx) return;
 
@@ -76,7 +78,7 @@ export class CanvasRenderer {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, cssWidth * dpr, cssHeight * dpr);
 
-    // Draw background color / grid if desired
+    // Draw background grid surface
     ctx.fillStyle = "#090d16"; // Dark background
     ctx.fillRect(0, 0, cssWidth * dpr, cssHeight * dpr);
 
@@ -89,6 +91,11 @@ export class CanvasRenderer {
     // Render Scene Elements
     for (const element of sortedElements) {
       renderElement(ctx, element);
+    }
+
+    // Render Temporary Drag Preview Element if present
+    if (previewElement) {
+      renderElement(ctx, previewElement);
     }
 
     // Render Selection Bounds for selected elements

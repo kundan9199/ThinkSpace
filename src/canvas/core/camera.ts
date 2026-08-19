@@ -32,6 +32,33 @@ export function worldToScreen(
 }
 
 /**
+ * Calculates new zoom and pan offsets so that zooming occurs
+ * around the specified screen cursor coordinate.
+ */
+export function zoomAtPoint(
+  screenX: number,
+  screenY: number,
+  zoomFactor: number,
+  viewport: ViewportState,
+  minZoom = 0.1,
+  maxZoom = 10.0
+): { zoom: number; panX: number; panY: number } {
+  const { zoom: currentZoom } = viewport;
+  const worldPoint = screenToWorld(screenX, screenY, viewport);
+  const targetZoom = currentZoom * zoomFactor;
+  const newZoom = Math.min(maxZoom, Math.max(minZoom, targetZoom));
+
+  const newPanX = screenX - worldPoint.x * newZoom;
+  const newPanY = screenY - worldPoint.y * newZoom;
+
+  return {
+    zoom: newZoom,
+    panX: newPanX,
+    panY: newPanY,
+  };
+}
+
+/**
  * Applies the camera matrix (devicePixelRatio scaling, pan offset, zoom)
  * to the Canvas 2D rendering context.
  */
