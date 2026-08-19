@@ -1,6 +1,14 @@
 import { CanvasElement, ViewportState } from "@/types/canvas";
 import { applyCameraTransform } from "../core/camera";
-import { renderElement, renderSelectionBounds } from "./element-renderers";
+import { renderElement } from "./element-renderers";
+import {
+  BoundingBox,
+  SelectionHandle,
+  HANDLE_SIZE,
+  ROTATION_HANDLE_OFFSET,
+} from "../geometry/geometry";
+import { renderFreehandStroke } from "./freehand-renderer";
+import { Point } from "@/types/canvas";
 
 export class CanvasRenderer {
   private canvas: HTMLCanvasElement | null = null;
@@ -22,17 +30,12 @@ export class CanvasRenderer {
   }
 
   /**
-   * Adjusts the canvas backing store resolution to match physical device pixels,
-   * keeping the CSS display size sharp on Retina / High-DPI screens.
+   * Adjusts the canvas backing store resolution to match physical device pixels.
    */
   public resize(cssWidth: number, cssHeight: number, dpr: number): void {
     if (!this.canvas) return;
-
-    // Set backing store dimensions in physical device pixels
     this.canvas.width = Math.floor(cssWidth * dpr);
     this.canvas.height = Math.floor(cssHeight * dpr);
-
-    // Set CSS display style dimensions
     this.canvas.style.width = `${cssWidth}px`;
     this.canvas.style.height = `${cssHeight}px`;
   }
@@ -46,7 +49,10 @@ export class CanvasRenderer {
     viewport: ViewportState,
     cssWidth: number,
     cssHeight: number,
-    previewElement?: CanvasElement | null
+    previewElement?: CanvasElement | null,
+    selectionBounds?: BoundingBox | null,
+    selectionHandles?: SelectionHandle[] | null,
+    freehandPreviewPoints?: Point[] | null
   ): void {
     if (this.animFrameId !== null) {
       cancelAnimationFrame(this.animFrameId);
@@ -54,7 +60,17 @@ export class CanvasRenderer {
 
     this.animFrameId = requestAnimationFrame(() => {
       this.animFrameId = null;
-      this.renderImmediate(elements, selectedIds, viewport, cssWidth, cssHeight, previewElement);
+      this.renderImmediate(
+        elements,
+        selectedIds,
+        viewport,
+        cssWidth,
+        cssHeight,
+        previewElement,
+        selectionBounds,
+        selectionHandles,
+        freehandPreviewPoints
+      );
     });
   }
 
@@ -67,7 +83,10 @@ export class CanvasRenderer {
     viewport: ViewportState,
     cssWidth: number,
     cssHeight: number,
-    previewElement?: CanvasElement | null
+    previewElement?: CanvasElement | null,
+    selectionBounds?: BoundingBox | null,
+    selectionHandles?: SelectionHandle[] | null,
+    freehandPreviewPoints?: Point[] | null
   ): void {
     if (!this.canvas || !this.ctx) return;
 
@@ -78,8 +97,8 @@ export class CanvasRenderer {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, cssWidth * dpr, cssHeight * dpr);
 
-    // Draw background grid surface
-    ctx.fillStyle = "#090d16"; // Dark background
+    // Fill background
+    ctx.fillStyle = "#090d16";
     ctx.fillRect(0, 0, cssWidth * dpr, cssHeight * dpr);
 
     // Apply Camera Transform Matrix (DPR + Pan + Zoom)
@@ -93,19 +112,86 @@ export class CanvasRenderer {
       renderElement(ctx, element);
     }
 
-    // Render Temporary Drag Preview Element if present
+    // Render Temporary Drag Preview Element
     if (previewElement) {
       renderElement(ctx, previewElement);
     }
 
-    // Render Selection Bounds for selected elements
-    if (selectedIds.length > 0) {
-      const selectedSet = new Set(selectedIds);
-      for (const element of sortedElements) {
-        if (selectedSet.has(element.id)) {
-          renderSelectionBounds(ctx, element);
-        }
-      }
+    // Render Freehand Stroke Preview (live during drawing)
+    if (freehandPreviewPoints && freehandPreviewPoints.length > 1) {
+      renderFreehandStroke(ctx, freehandPreviewPoints, {
+        strokeColor: "#3b82f6",
+        strokeWidth: 3,
+        opacity: 1,
+      });
     }
+
+    // Render Selection Bounds and Handles
+    if (selectedIds.length > 0 && selectionBounds) {
+      this.renderSelectionOverlay(ctx, selectionBounds, selectionHandles ?? []);
+    }
+  }
+
+  private renderSelectionOverlay(
+    ctx: CanvasRenderingContext2D,
+    bounds: BoundingBox,
+    handles: SelectionHandle[]
+  ): void {
+    const { x, y, width, height } = bounds;
+    const PADDING = 6;
+
+    // Selection bounding box
+    ctx.save();
+    ctx.strokeStyle = "#3b82f6";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 4]);
+    ctx.strokeRect(x - PADDING, y - PADDING, width + PADDING * 2, height + PADDING * 2);
+    ctx.restore();
+
+    // Handles
+    for (const handle of handles) {
+      ctx.save();
+      if (handle.id === "rotate") {
+        // Rotation handle: filled circle
+        ctx.beginPath();
+        ctx.arc(handle.x, handle.y, HANDLE_SIZE * 0.7, 0, Math.PI * 2);
+        ctx.fillStyle = "#3b82f6";
+        ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Connector line from top edge to rotation handle
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = "#3b82f680";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(handle.x, y - PADDING);
+        ctx.lineTo(handle.x, handle.y + HANDLE_SIZE * 0.7);
+        ctx.stroke();
+      } else {
+        // Resize handle: square
+        ctx.fillStyle = "#fff";
+        ctx.strokeStyle = "#3b82f6";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([]);
+        ctx.fillRect(
+          handle.x - HANDLE_SIZE,
+          handle.y - HANDLE_SIZE,
+          HANDLE_SIZE * 2,
+          HANDLE_SIZE * 2
+        );
+        ctx.strokeRect(
+          handle.x - HANDLE_SIZE,
+          handle.y - HANDLE_SIZE,
+          HANDLE_SIZE * 2,
+          HANDLE_SIZE * 2
+        );
+      }
+      ctx.restore();
+    }
+
+    // Reference to suppress unused import warning
+    void ROTATION_HANDLE_OFFSET;
   }
 }

@@ -7,6 +7,7 @@ import {
   FreehandElement,
   TextElement,
 } from "@/types/canvas";
+import { renderFreehandStroke } from "./freehand-renderer";
 
 export function renderRectangle(
   ctx: CanvasRenderingContext2D,
@@ -128,25 +129,13 @@ export function renderFreehand(
   ctx: CanvasRenderingContext2D,
   element: FreehandElement
 ): void {
-  const { points, strokeColor, strokeWidth, opacity } = element;
-  if (!points || points.length === 0) return;
+  if (!element.points || element.points.length === 0) return;
 
-  ctx.save();
-  ctx.globalAlpha = opacity;
-  ctx.strokeStyle = strokeColor;
-  ctx.lineWidth = strokeWidth;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-
-  ctx.beginPath();
-  ctx.moveTo(points[0].x, points[0].y);
-
-  for (let i = 1; i < points.length; i++) {
-    ctx.lineTo(points[i].x, points[i].y);
-  }
-
-  ctx.stroke();
-  ctx.restore();
+  renderFreehandStroke(ctx, element.points, {
+    strokeColor: element.strokeColor,
+    strokeWidth: element.strokeWidth,
+    opacity: element.opacity,
+  });
 }
 
 export function renderText(

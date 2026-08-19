@@ -7,6 +7,10 @@ A modern, production-quality collaborative whiteboard application. Draw, brainst
 - ✅ **Phase 0 — Foundation**: Design system, Next.js 16 setup, 10 UI components, layout shell, landing page.
 - ✅ **Phase 1 — Authentication & Database**: Supabase Auth (Email/Password), Prisma ORM setup, User profile synchronization, protected `/dashboard` route, middleware session handling.
 - ✅ **Phase 2 — Workspace & Board Management**: Server-side Board CRUD, unique 6-character room codes (`H7K9P2`), room joining flow, owner authorization, and protected `/board/[id]` workspace shell.
+- ✅ **Phase 3 — Canvas Engine**:
+  - 3.1 Canvas Foundation (Discriminated union scene model, Zustand store, pure Canvas 2D render loop, high-DPI scaling).
+  - 3.2 Camera & Basic Tools (Cursor-centered zoom, Pan via middle mouse / Space+drag / Hand tool, Rect / Ellipse / Line / Arrow shapes with rAF preview).
+  - 3.3 Drawing & Object Interaction (Smooth freehand pencil drawing with `perfect-freehand`, single/multi-selection, hit testing, moving, resizing with 8 handles, rotating with angle offset, eraser tool, and keyboard shortcuts).
 
 ## Features
 
@@ -14,7 +18,7 @@ A modern, production-quality collaborative whiteboard application. Draw, brainst
 - 🔐 **Server-Side Authorization (Phase 1 & 2)** — Supabase Auth email/password, session persistence, and server-side authorization ensuring only board owners can rename/delete boards.
 - 🗄️ **Database Integration** — Prisma 7 ORM configured with Supabase PostgreSQL datasource for `User`, `Board`, `BoardElement`, and `BoardParticipant` models.
 - 🎨 **Futuristic Design System** — Dark Glassmorphism theme with accessible controls, responsive forms, and glowing cyan accents.
-- ✏️ **Drawing Engine (Coming in Phase 3 & 4)** — Geometric shapes, rough.js, freehand pencil strokes.
+- ✏️ **Canvas Engine (Phase 3)** — Geometric shapes, smooth pressure-sensitive freehand drawing, full object selection, resize handles, rotation, translation, and eraser.
 - 🔄 **Real-time Collaboration (Coming in Phase 7 & 8)** — Socket.IO multiplayer drawing and live cursors.
 
 ## Tech Stack

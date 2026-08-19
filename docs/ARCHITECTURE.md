@@ -77,10 +77,35 @@ Canvas state is isolated from application/auth state using a dedicated Zustand s
   - `onPointerUp`: If shape size > 2px, assigns a unique ID and commits the element to the Zustand store via `addElement`.
 - **Performance**: Temporary shape drag previews render through `requestAnimationFrame` using `previewElementRef` without dispatching React state updates or polluting Zustand store during drag motion.
 
-### 5. Rendering Pipeline (`src/canvas/rendering/`)
+### 5. Drawing & Object Interaction (Phase 3.3) (`src/canvas/geometry/geometry.ts`, `src/canvas/rendering/freehand-renderer.ts`)
+- **Freehand Drawing with `perfect-freehand`**:
+  - Raw pointer samples collected in world space during pointer drag.
+  - Rendered with real-time pressure, thinning, streamline, and smoothing into smooth polygonal 2D paths.
+  - Drag preview points rendered without committing to state until `pointerup`.
+- **Hit Testing Pipeline**:
+  - `hitTestAll`: Selects topmost element by descending `zIndex`.
+  - Geometric hit tests per element type:
+    - **Rectangle / Text**: Axis-aligned bounding box (with inverse local rotation transform if rotated).
+    - **Ellipse**: Normalized ellipse equation `(dx/rx)^2 + (dy/ry)^2 <= 1`.
+    - **Line / Arrow**: Point-to-segment distance algorithm with stroke tolerance.
+    - **Freehand**: Segment distance check across sampled points.
+- **Selection & Transform System**:
+  - **Single & Multi-Select**: Click to select, Shift+click to toggle selection in/out, click empty canvas to deselect.
+  - **Bounding Box & Handles**: Canvas-rendered dashed overlay with 8 resize handles (`tl`, `tm`, `tr`, `ml`, `mr`, `bl`, `bm`, `br`) and 1 rotation handle (`rotate` with connector line).
+  - **Move**: World-space delta displacement applied to all selected elements simultaneously.
+  - **Resize**: Proportional and directional resizing recalculating element bounds and points/endpoints.
+  - **Rotate**: Origin-centered rotation using `Math.atan2` preserving initial engage angle offset.
+- **Delete & Eraser**:
+  - Keyboard: `Delete` / `Backspace` removes all selected elements and clears selection.
+  - Eraser Tool: Click on any element directly deletes it.
+- **Keyboard Shortcuts**:
+  - `V` = Select, `H` = Hand/Pan, `R` = Rectangle, `O` = Ellipse, `L` = Line, `A` = Arrow, `P` = Pencil (Freehand), `Delete`/`Backspace` = Delete, `Space` (hold) = Quick Pan.
+
+### 6. Rendering Pipeline (`src/canvas/rendering/`)
 - **`CanvasRenderer`**: High-performance class controlling the 2D rendering loop via `requestAnimationFrame`.
 - **`devicePixelRatio` Handling**: Scaling the canvas backing store resolution (`canvas.width = cssWidth * dpr`) while setting CSS size (`canvas.style.width = cssWidth + "px"`) ensures crisp, high-DPI rendering on Retina screens without distortion.
 - **Camera Matrix**: `applyCameraTransform` transforms world coordinates to screen pixels using `ctx.scale(dpr)` → `ctx.translate(panX, panY)` → `ctx.scale(zoom)`.
+- **Layering Order**: Background → Sorted Scene Elements → Live Drag Preview → Freehand Drawing Preview → Selection Bounding Box & Handles.
 
 ---
 
