@@ -123,12 +123,11 @@ export function hitTest(element: CanvasElement, worldX: number, worldY: number):
 function hitTestLocal(element: CanvasElement, wx: number, wy: number): boolean {
   switch (element.type) {
     case "rectangle": {
-      return (
-        wx >= element.x &&
-        wx <= element.x + element.width &&
-        wy >= element.y &&
-        wy <= element.y + element.height
-      );
+      const minX = Math.min(element.x, element.x + element.width);
+      const maxX = Math.max(element.x, element.x + element.width);
+      const minY = Math.min(element.y, element.y + element.height);
+      const maxY = Math.max(element.y, element.y + element.height);
+      return wx >= minX && wx <= maxX && wy >= minY && wy <= maxY;
     }
 
     case "ellipse": {
@@ -146,12 +145,18 @@ function hitTestLocal(element: CanvasElement, wx: number, wy: number): boolean {
     case "arrow": {
       return (
         pointToSegmentDist(wx, wy, element.x, element.y, element.x2, element.y2) <=
-        CLICK_TOLERANCE + element.strokeWidth
+        CLICK_TOLERANCE + (element.strokeWidth || 1)
       );
     }
 
     case "freehand": {
-      if (element.points.length === 0) return false;
+      if (!element.points || element.points.length === 0) return false;
+      if (element.points.length === 1) {
+        return (
+          Math.hypot(wx - element.points[0].x, wy - element.points[0].y) <=
+          CLICK_TOLERANCE + (element.strokeWidth || 1)
+        );
+      }
       for (let i = 0; i < element.points.length - 1; i++) {
         const d = pointToSegmentDist(
           wx,
@@ -161,18 +166,17 @@ function hitTestLocal(element: CanvasElement, wx: number, wy: number): boolean {
           element.points[i + 1].x,
           element.points[i + 1].y
         );
-        if (d <= CLICK_TOLERANCE + element.strokeWidth) return true;
+        if (d <= CLICK_TOLERANCE + (element.strokeWidth || 1)) return true;
       }
       return false;
     }
 
     case "text": {
-      return (
-        wx >= element.x &&
-        wx <= element.x + element.width &&
-        wy >= element.y &&
-        wy <= element.y + element.height
-      );
+      const minX = Math.min(element.x, element.x + element.width);
+      const maxX = Math.max(element.x, element.x + element.width);
+      const minY = Math.min(element.y, element.y + element.height);
+      const maxY = Math.max(element.y, element.y + element.height);
+      return wx >= minX && wx <= maxX && wy >= minY && wy <= maxY;
     }
   }
 }
@@ -187,7 +191,7 @@ export function hitTestAll(
   worldY: number
 ): CanvasElement | null {
   // Iterate from highest to lowest zIndex
-  const sorted = [...elements].sort((a, b) => b.zIndex - a.zIndex);
+  const sorted = [...elements].sort((a, b) => (b.zIndex ?? 0) - (a.zIndex ?? 0));
   for (const el of sorted) {
     if (hitTest(el, worldX, worldY)) return el;
   }
@@ -275,7 +279,7 @@ export function translateElement(el: CanvasElement, dx: number, dy: number): Can
       ...el,
       x: el.x + dx,
       y: el.y + dy,
-      points: el.points.map((p) => ({ x: p.x + dx, y: p.y + dy })),
+      points: (el.points || []).map((p) => ({ x: p.x + dx, y: p.y + dy })),
     };
   }
   return { ...el, x: el.x + dx, y: el.y + dy };
@@ -355,22 +359,22 @@ export function resizeElement(
       y: ny + relY1 * scaleY,
       x2: nx + relX2 * scaleX,
       y2: ny + relY2 * scaleY,
-      width: nw,
-      height: nh,
+      width: Math.max(1, Math.abs((orig.x2 - orig.x) * scaleX)),
+      height: Math.max(1, Math.abs((orig.y2 - orig.y) * scaleY)),
     };
   }
 
   if (orig.type === "freehand") {
-    const scaledPoints = orig.points.map((p) => ({
+    const scaledPoints = (orig.points || []).map((p) => ({
       x: nx + (p.x - ox) * scaleX,
       y: ny + (p.y - oy) * scaleY,
     }));
     return {
       ...orig,
-      x: nx,
-      y: ny,
-      width: nw,
-      height: nh,
+      x: nx + (orig.x - ox) * scaleX,
+      y: ny + (orig.y - oy) * scaleY,
+      width: Math.max(1, orig.width * scaleX),
+      height: Math.max(1, orig.height * scaleY),
       points: scaledPoints,
     };
   }
@@ -387,8 +391,8 @@ export function resizeElement(
     );
     return {
       ...orig,
-      x: nx,
-      y: ny,
+      x: nx + (orig.x - ox) * scaleX,
+      y: ny + (orig.y - oy) * scaleY,
       fontSize: newFontSize,
       width: measured.width,
       height: measured.height,
@@ -396,5 +400,13 @@ export function resizeElement(
     };
   }
 
-  return { ...orig, x: nx, y: ny, width: nw, height: nh };
+  const relX = orig.x - ox;
+  const relY = orig.y - oy;
+  return {
+    ...orig,
+    x: nx + relX * scaleX,
+    y: ny + relY * scaleY,
+    width: Math.max(1, orig.width * scaleX),
+    height: Math.max(1, orig.height * scaleY),
+  };
 }

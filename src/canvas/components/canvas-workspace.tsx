@@ -54,7 +54,7 @@ const TOOLS: Array<{ type: ToolType; label: string; icon: React.ReactNode }> = [
   { type: "select", label: "Select (V)", icon: <MousePointer className="h-4 w-4" /> },
   { type: "hand", label: "Hand / Pan (H)", icon: <Hand className="h-4 w-4" /> },
   { type: "rectangle", label: "Rectangle (R)", icon: <Square className="h-4 w-4" /> },
-  { type: "ellipse", label: "Ellipse (E)", icon: <Circle className="h-4 w-4" /> },
+  { type: "ellipse", label: "Ellipse (O)", icon: <Circle className="h-4 w-4" /> },
   { type: "line", label: "Line (L)", icon: <Minus className="h-4 w-4" /> },
   { type: "arrow", label: "Arrow (A)", icon: <ArrowUpRight className="h-4 w-4" /> },
   { type: "freehand", label: "Pencil (P)", icon: <Pencil className="h-4 w-4" /> },
@@ -527,6 +527,10 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
         case "t":
         case "T":
           setActiveTool("text");
+          break;
+        case "e":
+        case "E":
+          setActiveTool("eraser");
           break;
         case "Delete":
         case "Backspace": {

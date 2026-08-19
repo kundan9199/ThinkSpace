@@ -145,7 +145,11 @@ Canvas state is isolated from application/auth state using a dedicated Zustand s
   - `calculateFitToContent`: Accurately frames all scene elements within viewport with 64px padding; resets to default viewport if scene is empty.
 - **High-Resolution PNG Export**:
   - Offscreen 2D canvas export pipeline reusing core `renderElement` functions at 2x scale with 4096px bounds protection.
-  - Two modes: Full Canvas Export (all elements + canvas background) and Selection Export (selected elements with tight bounding box padding). Excludes HUD and handles.
+### 9. Canvas Polish & Stabilization (Phase 3.7) (`src/canvas/geometry/geometry.ts`, `src/store/canvas/canvas-store.ts`)
+- **Multi-Selection Geometry Stability**: Proportional relative scaling across multi-selected elements during resize drags; normalized hit testing preventing issues with inverted or zero dimensions.
+- **Ghost Selection Prevention**: Automatic pruning in `setSelectedElementIds` and `setElements` ensuring selection IDs always reference valid, existing elements.
+- **Single-Dot Freehand Hit Testing**: Hit testing fallback for 1-point freehand strokes ensuring single-click strokes are selectable and erasable.
+- **Shortcut & Tooling Alignment**: Added explicit `E` keyboard shortcut for eraser tool alongside `O` for ellipse tool.
 
 ---
 

@@ -14,6 +14,7 @@ A modern, production-quality collaborative whiteboard application. Draw, brainst
   - 3.4 Text & History (Multiline text tool with offscreen measurement, floating textarea editor, Undo/Redo history stack with 100 snapshots, HUD controls, and transformation history coalescing).
   - 3.5 Element Styling & Canvas Appearance (Properties panel, stroke & fill colors, stroke width, styles, sloppiness, roundness, opacity, typography, layer ordering, and customizable canvas background).
   - 3.6 Canvas UX, Clipboard & Export (Copy, Cut, Paste with new IDs and offsets, Duplicate, Select All, Arrow key movement with history coalescing, enhanced Zoom HUD, Fit to Content, and 2x High-Res PNG Export for full canvas & selection).
+  - 3.7 Canvas Polish & Stabilization (Multi-selection proportional resize fix, ghost selection pruning, single-dot freehand hit testing, keyboard shortcut alignment, and full regression stabilization).
 
 ## Features
 

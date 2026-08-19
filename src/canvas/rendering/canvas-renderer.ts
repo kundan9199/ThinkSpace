@@ -5,7 +5,6 @@ import {
   BoundingBox,
   SelectionHandle,
   HANDLE_SIZE,
-  ROTATION_HANDLE_OFFSET,
 } from "../geometry/geometry";
 import { renderFreehandStroke } from "./freehand-renderer";
 import { Point } from "@/types/canvas";
@@ -193,8 +192,5 @@ export class CanvasRenderer {
       }
       ctx.restore();
     }
-
-    // Reference to suppress unused import warning
-    void ROTATION_HANDLE_OFFSET;
   }
 }

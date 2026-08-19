@@ -120,7 +120,14 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   past: [],
   future: [],
 
-  setElements: (elements) => set({ elements }),
+  setElements: (elements) =>
+    set((state) => {
+      const existingIds = new Set(elements.map((el) => el.id));
+      return {
+        elements,
+        selectedElementIds: state.selectedElementIds.filter((id) => existingIds.has(id)),
+      };
+    }),
 
   addElement: (element) =>
     set((state) => ({
@@ -315,7 +322,13 @@ export const useCanvasStore = create<CanvasState>((set) => ({
       };
     }),
 
-  setSelectedElementIds: (selectedElementIds) => set({ selectedElementIds }),
+  setSelectedElementIds: (selectedElementIds) =>
+    set((state) => {
+      const existingIds = new Set(state.elements.map((el) => el.id));
+      return {
+        selectedElementIds: selectedElementIds.filter((id) => existingIds.has(id)),
+      };
+    }),
 
   clearSelection: () => set({ selectedElementIds: [] }),
 
