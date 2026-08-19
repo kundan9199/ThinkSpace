@@ -7,6 +7,8 @@ import { screenToWorld, worldToScreen, zoomAtPoint } from "../core/camera";
 import { ToolType, CanvasElement, Point, TextElement } from "@/types/canvas";
 import { BoardDetails } from "@/lib/board/actions";
 import { measureText } from "../geometry/text-measurement";
+import { PropertiesPanel } from "./properties-panel";
+import { CanvasBackgroundControl } from "./canvas-background-control";
 import {
   getUnionBounds,
   getSelectionHandles,
@@ -126,6 +128,7 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
   const selectedElementIds = useCanvasStore((s) => s.selectedElementIds);
   const activeTool = useCanvasStore((s) => s.activeTool);
   const viewport = useCanvasStore((s) => s.viewport);
+  const canvasBackgroundColor = useCanvasStore((s) => s.canvasBackgroundColor);
   const past = useCanvasStore((s) => s.past);
   const future = useCanvasStore((s) => s.future);
 
@@ -177,7 +180,8 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
         previewEl ?? null,
         bounds,
         handles,
-        freehandPts ?? null
+        freehandPts ?? null,
+        state.canvasBackgroundColor
       );
     },
     [getSelectionState]
@@ -240,10 +244,11 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
         null,
         bounds,
         handles,
-        null
+        null,
+        canvasBackgroundColor
       );
     }
-  }, [elements, selectedElementIds, viewport, dimensions, getSelectionState]);
+  }, [elements, selectedElementIds, viewport, dimensions, canvasBackgroundColor, getSelectionState]);
 
   // ── 4. Text Editing Commit / Cancel ───────────────────────────────────────
   const commitTextEditing = useCallback(() => {
@@ -1040,8 +1045,11 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
         </button>
       </div>
 
-      {/* Bottom Left: Board & Scene Info HUD */}
-      <div className="absolute bottom-4 left-4 z-20 flex items-center gap-3">
+      {/* Floating Properties Panel (Contextual when elements are selected) */}
+      <PropertiesPanel />
+
+      {/* Bottom Left: Board & Scene Info HUD + Canvas Background Control */}
+      <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2">
         <div className="flex items-center gap-2 rounded-xl border border-border/60 bg-bg-secondary/70 backdrop-blur-md px-3 py-1.5 text-xs text-text-muted font-mono shadow-lg">
           <Layers className="h-3.5 w-3.5 text-accent" />
           <span>
@@ -1050,6 +1058,8 @@ export function CanvasWorkspace({ board }: CanvasWorkspaceProps) {
           <span className="text-border">|</span>
           <span className="text-text-secondary">{board.title}</span>
         </div>
+
+        <CanvasBackgroundControl />
       </div>
 
       {/* Bottom Right: Zoom Controls HUD */}

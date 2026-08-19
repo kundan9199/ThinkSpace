@@ -31,12 +31,14 @@ export function measureText(
   text: string,
   fontSize: number = 20,
   fontFamily: string = "Inter, sans-serif",
-  fontWeight: string = "normal"
+  fontWeight: string = "normal",
+  italic: boolean = false
 ): TextDimensions {
   const lines = text.split("\n");
   const lineHeight = Math.round(fontSize * 1.25);
   const minWidth = 24;
   const minHeight = lineHeight;
+  const fontStyle = italic ? "italic" : "normal";
 
   const ctx = getOffscreenContext();
   if (!ctx) {
@@ -55,7 +57,7 @@ export function measureText(
   }
 
   ctx.save();
-  ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+  ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
 
   let maxWidth = 0;
   for (const line of lines) {

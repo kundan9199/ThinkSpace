@@ -382,7 +382,8 @@ export function resizeElement(
       orig.text,
       newFontSize,
       orig.fontFamily,
-      orig.fontWeight
+      orig.fontWeight,
+      orig.italic ?? false
     );
     return {
       ...orig,

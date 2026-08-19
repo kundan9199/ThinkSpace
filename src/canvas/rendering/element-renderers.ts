@@ -8,31 +8,68 @@ import {
   TextElement,
 } from "@/types/canvas";
 import { renderFreehandStroke } from "./freehand-renderer";
+import {
+  applyStrokeStyle,
+  createPRNG,
+  getSeedFromId,
+  drawSketchRect,
+  drawSketchEllipse,
+  drawSketchLine,
+} from "./sketch-renderer";
 
 export function renderRectangle(
   ctx: CanvasRenderingContext2D,
   element: RectangleElement
 ): void {
-  const { x, y, width, height, cornerRadius, strokeColor, backgroundColor, strokeWidth, opacity } = element;
+  const {
+    id,
+    x,
+    y,
+    width,
+    height,
+    cornerRadius: rawRadius,
+    roundness,
+    strokeColor,
+    backgroundColor,
+    strokeWidth,
+    strokeStyle,
+    sloppiness = "normal",
+    opacity,
+  } = element;
 
   ctx.save();
   ctx.globalAlpha = opacity;
-  ctx.strokeStyle = strokeColor;
-  ctx.fillStyle = backgroundColor;
-  ctx.lineWidth = strokeWidth;
 
-  ctx.beginPath();
-  if (cornerRadius && cornerRadius > 0 && typeof ctx.roundRect === "function") {
-    ctx.roundRect(x, y, width, height, cornerRadius);
-  } else {
-    ctx.rect(x, y, width, height);
-  }
+  // Determine actual corner radius based on roundness/cornerRadius
+  const cornerRadius =
+    roundness === "sharp"
+      ? 0
+      : roundness === "rounded"
+      ? (rawRadius && rawRadius > 0 ? rawRadius : 12)
+      : (rawRadius ?? 0);
 
+  // 1. Render Fill
   if (backgroundColor && backgroundColor !== "transparent") {
+    ctx.fillStyle = backgroundColor;
+    ctx.beginPath();
+    if (cornerRadius > 0 && typeof ctx.roundRect === "function") {
+      ctx.roundRect(x, y, width, height, cornerRadius);
+    } else {
+      ctx.rect(x, y, width, height);
+    }
     ctx.fill();
   }
+
+  // 2. Render Stroke Outline
   if (strokeWidth > 0 && strokeColor && strokeColor !== "transparent") {
-    ctx.stroke();
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = strokeWidth;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    applyStrokeStyle(ctx, strokeStyle, strokeWidth);
+
+    const rand = createPRNG(getSeedFromId(id));
+    drawSketchRect(ctx, x, y, width, height, cornerRadius, sloppiness, rand);
   }
 
   ctx.restore();
@@ -42,27 +79,46 @@ export function renderEllipse(
   ctx: CanvasRenderingContext2D,
   element: EllipseElement
 ): void {
-  const { x, y, width, height, strokeColor, backgroundColor, strokeWidth, opacity } = element;
+  const {
+    id,
+    x,
+    y,
+    width,
+    height,
+    strokeColor,
+    backgroundColor,
+    strokeWidth,
+    strokeStyle,
+    sloppiness = "normal",
+    opacity,
+  } = element;
 
   ctx.save();
   ctx.globalAlpha = opacity;
-  ctx.strokeStyle = strokeColor;
-  ctx.fillStyle = backgroundColor;
-  ctx.lineWidth = strokeWidth;
 
   const rx = Math.abs(width) / 2;
   const ry = Math.abs(height) / 2;
   const cx = x + rx;
   const cy = y + ry;
 
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI);
+  if (rx > 0 && ry > 0) {
+    // 1. Render Fill
+    if (backgroundColor && backgroundColor !== "transparent") {
+      ctx.fillStyle = backgroundColor;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI);
+      ctx.fill();
+    }
 
-  if (backgroundColor && backgroundColor !== "transparent") {
-    ctx.fill();
-  }
-  if (strokeWidth > 0 && strokeColor && strokeColor !== "transparent") {
-    ctx.stroke();
+    // 2. Render Stroke
+    if (strokeWidth > 0 && strokeColor && strokeColor !== "transparent") {
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = strokeWidth;
+      applyStrokeStyle(ctx, strokeStyle, strokeWidth);
+
+      const rand = createPRNG(getSeedFromId(id));
+      drawSketchEllipse(ctx, cx, cy, rx, ry, sloppiness, rand);
+    }
   }
 
   ctx.restore();
@@ -72,18 +128,30 @@ export function renderLine(
   ctx: CanvasRenderingContext2D,
   element: LineElement
 ): void {
-  const { x, y, x2, y2, strokeColor, strokeWidth, opacity } = element;
+  const {
+    id,
+    x,
+    y,
+    x2,
+    y2,
+    strokeColor,
+    strokeWidth,
+    strokeStyle,
+    sloppiness = "normal",
+    opacity,
+  } = element;
+
+  if (strokeWidth <= 0 || !strokeColor || strokeColor === "transparent") return;
 
   ctx.save();
   ctx.globalAlpha = opacity;
   ctx.strokeStyle = strokeColor;
   ctx.lineWidth = strokeWidth;
   ctx.lineCap = "round";
+  applyStrokeStyle(ctx, strokeStyle, strokeWidth);
 
-  ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.lineTo(x2, y2);
-  ctx.stroke();
+  const rand = createPRNG(getSeedFromId(id));
+  drawSketchLine(ctx, x, y, x2, y2, sloppiness, rand);
 
   ctx.restore();
 }
@@ -92,7 +160,21 @@ export function renderArrow(
   ctx: CanvasRenderingContext2D,
   element: ArrowElement
 ): void {
-  const { x, y, x2, y2, strokeColor, strokeWidth, opacity, headSize = 12 } = element;
+  const {
+    id,
+    x,
+    y,
+    x2,
+    y2,
+    strokeColor,
+    strokeWidth,
+    strokeStyle,
+    sloppiness = "normal",
+    opacity,
+    headSize = 14,
+  } = element;
+
+  if (strokeWidth <= 0 || !strokeColor || strokeColor === "transparent") return;
 
   ctx.save();
   ctx.globalAlpha = opacity;
@@ -100,27 +182,34 @@ export function renderArrow(
   ctx.fillStyle = strokeColor;
   ctx.lineWidth = strokeWidth;
   ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  applyStrokeStyle(ctx, strokeStyle, strokeWidth);
+
+  const rand = createPRNG(getSeedFromId(id));
 
   // Draw main shaft
-  ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.lineTo(x2, y2);
-  ctx.stroke();
+  drawSketchLine(ctx, x, y, x2, y2, sloppiness, rand);
 
   // Draw arrowhead
   const angle = Math.atan2(y2 - y, x2 - x);
-  ctx.beginPath();
-  ctx.moveTo(x2, y2);
-  ctx.lineTo(
-    x2 - headSize * Math.cos(angle - Math.PI / 6),
-    y2 - headSize * Math.sin(angle - Math.PI / 6)
-  );
-  ctx.lineTo(
-    x2 - headSize * Math.cos(angle + Math.PI / 6),
-    y2 - headSize * Math.sin(angle + Math.PI / 6)
-  );
-  ctx.closePath();
-  ctx.fill();
+  const fin1X = x2 - headSize * Math.cos(angle - Math.PI / 6);
+  const fin1Y = y2 - headSize * Math.sin(angle - Math.PI / 6);
+  const fin2X = x2 - headSize * Math.cos(angle + Math.PI / 6);
+  const fin2Y = y2 - headSize * Math.sin(angle + Math.PI / 6);
+
+  if (sloppiness === "precise") {
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(fin1X, fin1Y);
+    ctx.lineTo(fin2X, fin2Y);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    // Sketchy arrowhead
+    drawSketchLine(ctx, x2, y2, fin1X, fin1Y, sloppiness, rand);
+    drawSketchLine(ctx, x2, y2, fin2X, fin2Y, sloppiness, rand);
+  }
 
   ctx.restore();
 }
@@ -145,12 +234,17 @@ export function renderText(
   const {
     x,
     y,
+    width,
+    height,
     text,
-    fontSize,
-    fontFamily,
+    fontSize = 20,
+    fontFamily = "Inter, sans-serif",
     fontWeight = "normal",
-    strokeColor,
-    opacity,
+    italic = false,
+    underline = false,
+    strokeColor = "#f8fafc",
+    backgroundColor,
+    opacity = 1,
     textAlign = "left",
     lineHeight: customLineHeight,
   } = element;
@@ -159,16 +253,70 @@ export function renderText(
 
   ctx.save();
   ctx.globalAlpha = opacity;
+
+  // 1. Render Background Box behind text (if specified and not transparent)
+  if (backgroundColor && backgroundColor !== "transparent") {
+    const PADDING = 4;
+    ctx.fillStyle = backgroundColor;
+    ctx.beginPath();
+    if (typeof ctx.roundRect === "function") {
+      ctx.roundRect(
+        x - PADDING,
+        y - PADDING,
+        width + PADDING * 2,
+        height + PADDING * 2,
+        4
+      );
+    } else {
+      ctx.rect(x - PADDING, y - PADDING, width + PADDING * 2, height + PADDING * 2);
+    }
+    ctx.fill();
+  }
+
+  // 2. Setup Font & Alignment
+  const fontStyle = italic ? "italic" : "normal";
   ctx.fillStyle = strokeColor;
-  ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+  ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
   ctx.textAlign = textAlign;
   ctx.textBaseline = "top";
 
   const lineHeight = customLineHeight || Math.round(fontSize * 1.25);
   const lines = text.split("\n");
 
+  // Calculate base X coordinate for each alignment mode
+  let baseLineX = x;
+  if (textAlign === "center") {
+    baseLineX = x + width / 2;
+  } else if (textAlign === "right") {
+    baseLineX = x + width;
+  }
+
   for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i], x, y + i * lineHeight);
+    const line = lines[i];
+    const lineY = y + i * lineHeight;
+    ctx.fillText(line, baseLineX, lineY);
+
+    // 3. Draw Underline if enabled
+    if (underline && line.length > 0) {
+      const metrics = ctx.measureText(line);
+      const lineWidth = metrics.width;
+      let lineStartX = baseLineX;
+      if (textAlign === "center") {
+        lineStartX = baseLineX - lineWidth / 2;
+      } else if (textAlign === "right") {
+        lineStartX = baseLineX - lineWidth;
+      }
+
+      ctx.save();
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = Math.max(1, Math.round(fontSize / 15));
+      ctx.beginPath();
+      const underlineY = lineY + fontSize + 2;
+      ctx.moveTo(lineStartX, underlineY);
+      ctx.lineTo(lineStartX + lineWidth, underlineY);
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   ctx.restore();

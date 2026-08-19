@@ -52,7 +52,8 @@ export class CanvasRenderer {
     previewElement?: CanvasElement | null,
     selectionBounds?: BoundingBox | null,
     selectionHandles?: SelectionHandle[] | null,
-    freehandPreviewPoints?: Point[] | null
+    freehandPreviewPoints?: Point[] | null,
+    canvasBackgroundColor: string = "#090d16"
   ): void {
     if (this.animFrameId !== null) {
       cancelAnimationFrame(this.animFrameId);
@@ -69,7 +70,8 @@ export class CanvasRenderer {
         previewElement,
         selectionBounds,
         selectionHandles,
-        freehandPreviewPoints
+        freehandPreviewPoints,
+        canvasBackgroundColor
       );
     });
   }
@@ -86,7 +88,8 @@ export class CanvasRenderer {
     previewElement?: CanvasElement | null,
     selectionBounds?: BoundingBox | null,
     selectionHandles?: SelectionHandle[] | null,
-    freehandPreviewPoints?: Point[] | null
+    freehandPreviewPoints?: Point[] | null,
+    canvasBackgroundColor: string = "#090d16"
   ): void {
     if (!this.canvas || !this.ctx) return;
 
@@ -97,8 +100,8 @@ export class CanvasRenderer {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, cssWidth * dpr, cssHeight * dpr);
 
-    // Fill background
-    ctx.fillStyle = "#090d16";
+    // Fill background with chosen canvas background color
+    ctx.fillStyle = canvasBackgroundColor || "#090d16";
     ctx.fillRect(0, 0, cssWidth * dpr, cssHeight * dpr);
 
     // Apply Camera Transform Matrix (DPR + Pan + Zoom)

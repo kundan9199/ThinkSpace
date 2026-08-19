@@ -29,6 +29,10 @@ export interface Point {
   y: number;
 }
 
+export type StrokeStyle = "solid" | "dashed" | "dotted";
+export type Sloppiness = "precise" | "normal" | "sketchy";
+export type Roundness = "sharp" | "rounded";
+
 export interface BaseElement {
   id: string;
   type: ElementType;
@@ -40,6 +44,9 @@ export interface BaseElement {
   strokeColor: string;
   backgroundColor: string;
   strokeWidth: number;
+  strokeStyle?: StrokeStyle;
+  sloppiness?: Sloppiness;
+  roundness?: Roundness;
   opacity: number;
   zIndex: number;
   createdAt: number;
@@ -78,7 +85,9 @@ export interface TextElement extends BaseElement {
   text: string;
   fontSize: number;
   fontFamily: string;
-  fontWeight?: string;
+  fontWeight?: "normal" | "bold" | string;
+  italic?: boolean;
+  underline?: boolean;
   textAlign?: "left" | "center" | "right";
   lineHeight?: number;
 }
